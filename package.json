@@ -12,7 +12,8 @@
     "inject": "npx postject ./dist/aifrontier NODE_SEA_BLOB ./dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA",
     "sign": "codesign --sign - ./dist/aifrontier",
     "make": "npm run package && npm run sea && npm run pre-inject && npm run inject && npm run sign",
-    "bundle": "node make_bundle.js"
+    "bundle": "node make_bundle.js",
+    "config": "node generate-sea-config.js"
   },
   "keywords": [],
   "author": "",
