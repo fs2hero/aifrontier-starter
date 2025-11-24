@@ -1,11 +1,11 @@
-import fs from 'fs'
-import path from 'path'
-import archiver from 'archiver'
-import { fileURLToPath } from 'url'
-import pathLib from 'path'
+const fs = require('fs')
+const path = require('path')
+const archiver = require('archiver')
+const { fileURLToPath } = require('url')
+// import pathLib from 'path'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = pathLib.dirname(fileURLToPath(import.meta.url))
+// const __filename = fileURLToPath(import.meta.url)
+// const __dirname = pathLib.dirname(fileURLToPath(import.meta.url))
 
 // AI2Apps 项目根目录
 const AI2APPS_ROOT = path.join(__dirname, '../../ai2apps')
