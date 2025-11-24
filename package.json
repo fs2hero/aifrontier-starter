@@ -1,0 +1,34 @@
+{
+  "name": "aifrontier",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "vite build src/frontend",
+    "obfuscate": "javascript-obfuscator ./build --output ./build-obf",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "npx ncc build ./src/backend/main.js -o dist/",
+    "sea": "node --experimental-sea-config sea-config.json",
+    "pre-inject": "cp $(command -v node) dist/aifrontier && codesign --remove-signature dist/aifrontier",
+    "inject": "npx postject ./dist/aifrontier NODE_SEA_BLOB ./dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA",
+    "sign": "codesign --sign - ./dist/aifrontier",
+    "make": "npm run package && npm run sea && npm run pre-inject && npm run inject && npm run sign",
+    "bundle": "node make_bundle.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.4",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "javascript-obfuscator": "^4.1.1",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@expo/sudo-prompt": "^9.3.2",
+    "archiver": "^7.0.1",
+    "auto-updater": "^1.0.2",
+    "express": "^5.1.0",
+    "yauzl": "^3.2.0"
+  }
+}

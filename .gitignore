@@ -1,0 +1,9 @@
+bundle.zip
+node_modules
+out
+package-lock.json
+Acefox.app
+Acefox-aarch64.AppImage
+dist
+build
+sea-config.*

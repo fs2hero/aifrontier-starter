@@ -1,0 +1,16 @@
+serverAddr = "frpc.ai2apps.com"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "12345678"
+
+metadatas.user = "10000"
+metadatas.key = "12345"
+
+[[proxies]]
+name = "user-1000"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 3015
+subdomain = "user10000"
+
