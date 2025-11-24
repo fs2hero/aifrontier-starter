@@ -287,7 +287,7 @@ async function launchFirefox(url) {
   if(process.platform === 'win32') {
     firefoxExe = path.join(firefoxDir,'firefox.exe');
   } else if(process.platform === 'linux') {
-    firefoxExe = path.join(firefoxDir,'Acefox.appImage');
+    firefoxExe = path.join(firefoxDir,'Acefox-aarch64.AppImage');
     args = ['--new-window', url];
   } else if(process.platform === 'darwin') {
     firefoxExe = path.join(firefoxDir,'Acefox.app','Contents','MacOS','firefox');

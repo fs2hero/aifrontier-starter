@@ -1,8 +1,8 @@
-import { readdirSync, statSync, writeFileSync } from 'fs';
-import { join, relative } from 'path';
-import { fileURLToPath } from 'url';
+const { readdirSync, statSync, writeFileSync } = require('fs');
+const { join, relative } = require('path');
+const { fileURLToPath } = require('url');
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+// const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 function collectAssets(dir, tag='build', baseDir = dir) {
   const assets = {};

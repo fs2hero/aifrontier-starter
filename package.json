@@ -9,9 +9,11 @@
     "package": "npx ncc build ./src/backend/main.js -o dist/",
     "sea": "node --experimental-sea-config sea-config.json",
     "pre-inject": "cp $(command -v node) dist/aifrontier && codesign --remove-signature dist/aifrontier",
+    "pre-inject-linux": "cp $(command -v node) dist/aifrontier",
     "inject": "npx postject ./dist/aifrontier NODE_SEA_BLOB ./dist/sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA",
     "sign": "codesign --sign - ./dist/aifrontier",
     "make": "npm run package && npm run sea && npm run pre-inject && npm run inject && npm run sign",
+    "make-linux": "npm run package && npm run sea && npm run pre-inject-linux && npm run inject",
     "bundle": "node make_bundle.js",
     "config": "node generate-sea-config.js"
   },
@@ -22,7 +24,6 @@
   "devDependencies": {
     "@vercel/ncc": "^0.38.4",
     "@vitejs/plugin-vue": "^6.0.2",
-    "appdmg": "^0.6.6",
     "javascript-obfuscator": "^4.1.1",
     "vite": "^7.2.4"
   },

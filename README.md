@@ -9,3 +9,4 @@
 
 ### 注意：目前仅在 macos 上测试通过,解压目录 ~/Library/Application\ Support/aifrontier
 ### node 版本 22.21.1, 如果出现 Error: Multiple occurences of sentinel "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2" found in the binary，请使用 nvm 安装的node 
+### macos构建需要 安装依赖 npm install -g appdmg
