@@ -2,17 +2,147 @@ const express = require('express')
 const path = require('path')
 const { fileURLToPath } = require('url');
 const { spawn } = require('child_process');
-const { existsSync, chmodSync } = require('fs');
+const { existsSync, chmodSync, writeFileSync, readFileSync } = require('fs');
 const { getAsset, isSea } = require('node:sea');
 const { unzip } = require('./zip.js')
 const { getUserDir, ensureDirSync } = require('./sys_utils.js')
 
 const app = express()
+let aaProcess;
+
+function runBashScript(script,cwd) {
+	return new Promise((resolve, reject) => {
+		const child = spawn('bash', ['-i'], {
+			stdio: ['pipe', 'pipe', 'pipe'],
+			env: process.env,
+			cwd:cwd||undefined
+		});
+		
+		let stdout = '';
+		let stderr = '';
+		let allout='';
+		
+		child.stdout.on('data', (data) => {
+			let pos;
+			stdout += data.toString();
+			allout += data.toString();
+			do {
+				pos = allout.indexOf("\n");
+				if (pos>=0){
+					console.log(`[runBashScript] ${allout.substring(0,pos)}`);
+					allout=allout.substring(pos+1);
+				}
+			}while(pos>=0)
+		});
+		
+		child.stderr.on('data', (data) => {
+			let pos;
+			stderr += data.toString();
+			allout += data.toString();
+			do {
+				pos = allout.indexOf("\n");
+				if (pos>=0){
+					console.log(`[runBashScript] ${allout.substring(0,pos+1)}`);
+					allout=allout.substring(pos+1);
+				}
+			}while(pos>=0)
+		});
+		
+		child.on('close', (code) => {
+			if (code === 0) {
+				let out=stdout.trim();
+				console.log(`[runBashScript] ${allout}`);
+				resolve(out);
+			} else {
+				let out=stderr;
+				console.log(`[runBashScript] ${allout}`);
+				reject(new Error(`Exited with code ${code}\n${stderr}`));
+			}
+		});
+		
+		child.stdin.write(script + '\n');
+		child.stdin.end();
+	});
+}
+
+async function getNodePath(userDataDir,v){
+	let nodePath;
+	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+	if (!existsSync(nodePathCache)) {
+		return null;
+	}
+	nodePath = readFileSync(nodePathCache, 'utf8').trim();
+	if (!existsSync(nodePath)){
+		return null;
+	}
+	return nodePath;
+}
+
+async function installNode(userDataDir,v,install=true){
+	let nodePath;
+	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+	let shellScript;
+	if(install) {
+		shellScript = `
+      unset npm_config_prefix
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      nvm install ${v}
+      nvm use ${v}
+      which node
+    `;
+	}else{
+		shellScript = `
+      unset npm_config_prefix
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      nvm use ${v}
+      which node
+    `;
+	}
+	try {
+		let result=await runBashScript(shellScript);
+		nodePath = result.trimEnd().split('\n').at(-1);
+		writeFileSync(nodePathCache, nodePath);
+	}catch(err){
+		console.error("Get node path error:");
+		console.error(err);
+		return null;
+	}
+	console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
+	return nodePath;
+}
+
+//---------------------------------------------------------------------------
+async function installNodePackages(userDataDir,nodeVersion){
+	const shellScript = `
+      unset npm_config_prefix
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      nvm use ${nodeVersion}
+	  npm install
+	`;
+	try {
+		await runBashScript(shellScript,userDataDir);
+		return true;
+	}catch(err){
+		return false;
+	}
+}
 
 // Serve the Vue frontend
 // app.use(express.static(path.join(__dirname, '../build')))
 // 统一的静态文件服务
 app.use((req, res, next) => {
+  let requestPath = req.path;
+
+  console.log(`request path:${requestPath}`)
+  if(requestPath.startsWith('/api')) {
+    next();
+
+    return;
+  }
+
   if (isSea()) {
     // SEA 环境
     serveFromSeaAssets(req, res, next);
@@ -42,21 +172,24 @@ function getAssetData(key) {
 }
 
 function convertArrayBufferToString(buffer, encoding = 'utf-8') {
-    // 方法1: 使用TextDecoder（推荐）
-    try {
-        const decoder = new TextDecoder(encoding);
-        return decoder.decode(buffer);
-    } catch (e) {
-        console.warn('TextDecoder not supported, using fallback method');
-    }
-    
-    // 方法2: 回退方法
-    const uint8Array = new Uint8Array(buffer);
-    let str = '';
-    for (let i = 0; i < uint8Array.length; i++) {
-        str += String.fromCharCode(uint8Array[i]);
-    }
-    return str;
+  if(!buffer) {
+    return '';
+  }
+
+  try {
+      const decoder = new TextDecoder(encoding);
+      return decoder.decode(buffer);
+  } catch (e) {
+      console.warn('TextDecoder not supported, using fallback method');
+  }
+  
+  // 方法2: 回退方法
+  const uint8Array = new Uint8Array(buffer);
+  let str = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+      str += String.fromCharCode(uint8Array[i]);
+  }
+  return str;
 }
 
 function serveFromSeaAssets(req, res, next) {
@@ -164,17 +297,25 @@ async function launchFirefox(url) {
   if(existsSync(firefoxExe)) {
 
     try {
-      chmodSync(firefoxExe, '755');
+      // chmodSync(firefoxExe, '755');
     } catch (error) {
       console.log('权限设置失败:', error.message);
     }
     // 使用 spawn 而不是 execFile，更好地处理进程
     const firefoxProcess = spawn(firefoxExe, args, {
-      detached: true,
-      stdio: 'ignore'
+      // detached: true,
+      // stdio: 'ignore'
     });
 
-    firefoxProcess.unref();
+    // firefoxProcess.unref();
+    firefoxProcess.on('exit', (code) => {
+      console.log('Server exited with code', code);
+
+      if(aaProcess) {
+        aaProcess.kill();
+      }
+      process.exit(code)
+    });
 
     // 可选：等待一段时间检查进程是否正常运行
     setTimeout(() => {
@@ -182,6 +323,10 @@ async function launchFirefox(url) {
         console.error('Acefox 启动失败');
       } else {
         console.log('Acefox 启动成功')
+
+        // setTimeout(() => {
+        //   ai2appsStart()
+        // }, 10000)
       }
     }, 3000);
 
@@ -197,9 +342,58 @@ async function launchFirefox(url) {
   }
 }
 
+async function ai2appsStart(cb) {
+  const userDir = getUserDir();
+  const targetDir = path.join(userDir.appData,'aifrontier','server');
+  const inAppBundleJson = convertArrayBufferToString(getAsset('bundle/bundle.json'))
+  if(inAppBundleJson) {
+    const bundleJson = JSON.parse(inAppBundleJson);
+
+    const nodeVersion=bundleJson.node;
+		let nodePath=await getNodePath(targetDir,nodeVersion);
+		console.log(`Installing node version: ${nodeVersion}`);
+		if(!nodePath) {
+			nodePath = await installNode(targetDir, nodeVersion, !!nodePath);
+		}
+		if(nodePath) {
+			process.env.PATH = `${path.dirname(nodePath)}:${process.env.PATH}`;
+		}
+
+    await installNodePackages(targetDir,nodeVersion);
+
+    const child = spawn("node", [path.join(targetDir,"start.js")],{cwd:targetDir,env:process.env});
+    child.stdout.on('data', async (data) => {
+      const text = data.toString();
+      console.log('[server]', text);
+      if (text.includes('READY:')) {
+        console.log("Local server ready, starting AI2Apps dashboard...");
+
+        cb && cb()
+      }
+    });
+    
+    child.stderr.on('data', (data) => {
+      console.error('[server error]', data.toString());
+    });
+    
+    child.on('exit', (code) => {
+      console.log('Server exited with code', code);
+    });
+
+    aaProcess = child;
+  }
+}
+
 
 app.get('/api/data', (req, res) => {
   res.json({ message: 'Hello from Node.js backend!' })
+})
+
+app.get('/api/bootstrap', async (req, res) => {
+  await ai2appsStart(() => {
+    res.json({ url: 'http://localhost:3015' })
+  });
+  console.log(`ai2appsStart complete`)
 })
 
 // Start the server

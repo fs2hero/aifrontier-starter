@@ -1,5 +1,15 @@
 <script setup>
+import { onMounted } from 'vue'
 import HelloWorld from './components/HelloWorld.vue'
+
+onMounted(() => {
+  fetch("api/bootstrap")
+  .then((response) => response.json())
+  .then((data) => {
+    console.log('bootstrap response ',data)
+    location.replace(data?.url)
+  });
+})
 </script>
 
 <template>
