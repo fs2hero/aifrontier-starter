@@ -377,7 +377,7 @@ async function ai2appsStart(cb) {
     });
     
     child.on('exit', (code) => {
-      console.log('Server exited with code', code);
+      console.log('aa exited with code', code);
     });
 
     aaProcess = child;
