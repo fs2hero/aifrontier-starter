@@ -4,6 +4,7 @@ out
 package-lock.json
 Acefox.app
 Acefox-aarch64.AppImage
+acefox
 dist
 build
 sea-config.*

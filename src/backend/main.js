@@ -65,6 +65,91 @@ function runBashScript(script,cwd) {
 	});
 }
 
+// function runShell(script, cwd) {
+//   const isWin = process.platform === "win32";
+
+//   return new Promise((resolve, reject) => {
+//     let child;
+
+//     if (isWin) {
+//       // Windows 下直接把脚本作为参数传给 PowerShell
+//       child = spawn("powershell.exe", [
+//         "-NoProfile",
+//         "-ExecutionPolicy", "Bypass",
+//         "-WindowStyle", "Hidden",
+//         "-Command", script
+//       ], {
+//         cwd: cwd || undefined,
+//         env: process.env,
+//       });
+//     } else {
+//       // Unix 系保持原样
+//       child = spawn("bash", ["-i", "-c", script], {
+//         cwd: cwd || undefined,
+//         env: process.env,
+//       });
+//     }
+
+//     let stdout = "";
+//     let stderr = "";
+
+//     child.stdout.on("data", (d) => {
+//       stdout += d.toString();
+//       console.log(`[runShell] ${d}`);
+//     });
+//     child.stderr.on("data", (d) => {
+//       stderr += d.toString();
+//       console.log(`[runShell] ${d}`);
+//     });
+
+//     child.on("close", (code) => {
+//       if (code === 0) resolve(stdout.trim());
+//       else reject(new Error(stderr));
+//     });
+//   });
+// }
+function runShell(script, cwd) {
+  const isWin = process.platform === "win32";
+
+  return new Promise((resolve, reject) => {
+    let child;
+
+    if (isWin) {
+      child = spawn("cmd.exe", [
+        "/c",
+        script
+      ], {
+        cwd: cwd || undefined,
+        env: process.env,
+      });
+    } else {
+      child = spawn("bash", ["-i", "-c", script], {
+        cwd: cwd || undefined,
+        env: process.env,
+      });
+    }
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (d) => {
+      stdout += d.toString();
+      console.log(`[runShell] ${d}`);
+    });
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+      console.log(`[runShell] ${d}`);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(stderr));
+    });
+  });
+}
+
+
+
 async function getNodePath(userDataDir,v){
 	let nodePath;
 	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
@@ -78,57 +163,121 @@ async function getNodePath(userDataDir,v){
 	return nodePath;
 }
 
-async function installNode(userDataDir,v,install=true){
-	let nodePath;
-	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
-	let shellScript;
-	if(install) {
-		shellScript = `
+async function installNode(userDataDir, v, install = true) {
+  const isWin = process.platform === "win32";
+  const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+
+  let script;
+  if (isWin) {
+    // script = install
+    //   ? `nvm install ${v}; nvm use ${v}; where.exe node`
+    //   : `nvm use ${v}; where.exe node`;
+    script = install
+    ? `nvm install ${v} && nvm use ${v} && where node`
+    : `nvm use ${v} && where node`;
+  } else {
+    script = `
       unset npm_config_prefix
       export NVM_DIR="$HOME/.nvm"
       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      nvm install ${v}
+      ${install ? `nvm install ${v}` : ""}
       nvm use ${v}
       which node
     `;
-	}else{
-		shellScript = `
-      unset npm_config_prefix
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      nvm use ${v}
-      which node
-    `;
-	}
-	try {
-		let result=await runBashScript(shellScript);
-		nodePath = result.trimEnd().split('\n').at(-1);
-		writeFileSync(nodePathCache, nodePath);
-	}catch(err){
-		console.error("Get node path error:");
-		console.error(err);
-		return null;
-	}
-	console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
-	return nodePath;
+  }
+
+  try {
+    const output = await runShell(script);
+    const nodePath = output.trim().split("\n").at(-1).trim();
+    writeFileSync(nodePathCache, nodePath);
+    console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
+    return nodePath;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
 }
 
-//---------------------------------------------------------------------------
-async function installNodePackages(userDataDir,nodeVersion){
-	const shellScript = `
+
+async function installNodePackages(userDataDir, nodeVersion) {
+  const isWin = process.platform === "win32";
+  let script;
+
+  if (isWin) {
+    script = `
+      nvm use ${nodeVersion}
+      npm install
+    `;
+  } else {
+    script = `
       unset npm_config_prefix
       export NVM_DIR="$HOME/.nvm"
       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
       nvm use ${nodeVersion}
-	  npm install
-	`;
-	try {
-		await runBashScript(shellScript,userDataDir);
-		return true;
-	}catch(err){
-		return false;
-	}
+      npm install
+    `;
+  }
+
+  try {
+    await runShell(script, userDataDir);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
+
+
+// async function installNode(userDataDir,v,install=true){
+// 	let nodePath;
+// 	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+// 	let shellScript;
+// 	if(install) {
+// 		shellScript = `
+//       unset npm_config_prefix
+//       export NVM_DIR="$HOME/.nvm"
+//       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+//       nvm install ${v}
+//       nvm use ${v}
+//       which node
+//     `;
+// 	}else{
+// 		shellScript = `
+//       unset npm_config_prefix
+//       export NVM_DIR="$HOME/.nvm"
+//       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+//       nvm use ${v}
+//       which node
+//     `;
+// 	}
+// 	try {
+// 		let result=await runBashScript(shellScript);
+// 		nodePath = result.trimEnd().split('\n').at(-1);
+// 		writeFileSync(nodePathCache, nodePath);
+// 	}catch(err){
+// 		console.error("Get node path error:");
+// 		console.error(err);
+// 		return null;
+// 	}
+// 	console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
+// 	return nodePath;
+// }
+
+//---------------------------------------------------------------------------
+// async function installNodePackages(userDataDir,nodeVersion){
+// 	const shellScript = `
+//       unset npm_config_prefix
+//       export NVM_DIR="$HOME/.nvm"
+//       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+//       nvm use ${nodeVersion}
+// 	  npm install
+// 	`;
+// 	try {
+// 		await runBashScript(shellScript,userDataDir);
+// 		return true;
+// 	}catch(err){
+// 		return false;
+// 	}
+// }
 
 // Serve the Vue frontend
 // app.use(express.static(path.join(__dirname, '../build')))
@@ -285,7 +434,7 @@ async function launchFirefox(url) {
   }
 
   if(process.platform === 'win32') {
-    firefoxExe = path.join(firefoxDir,'firefox.exe');
+    firefoxExe = path.join(firefoxDir,'acefox','firefox.exe');
   } else if(process.platform === 'linux') {
     firefoxExe = path.join(firefoxDir,'Acefox-aarch64.AppImage');
     args = ['--new-window', url];
@@ -303,18 +452,18 @@ async function launchFirefox(url) {
     }
     // 使用 spawn 而不是 execFile，更好地处理进程
     const firefoxProcess = spawn(firefoxExe, args, {
-      // detached: true,
-      // stdio: 'ignore'
+      detached: false,
+      stdio: 'ignore'
     });
 
     // firefoxProcess.unref();
     firefoxProcess.on('exit', (code) => {
       console.log('Server exited with code', code);
 
-      if(aaProcess) {
-        aaProcess.kill();
-      }
-      process.exit(code)
+      // if(aaProcess) {
+      //   aaProcess.kill();
+      // }
+      // process.exit(code)
     });
 
     // 可选：等待一段时间检查进程是否正常运行

@@ -18,7 +18,10 @@ function collectAssets(dir, tag='build', baseDir = dir) {
         traverse(fullPath);
       } else {
         // 计算相对路径作为 blob 中的键
-        const relativePath = relative(baseDir, fullPath);
+        let relativePath = relative(baseDir, fullPath);
+        if(process.platform === 'win32') {
+          relativePath = relativePath.replace(/\\/g,'/');
+        }
         assets[`${tag}/${relativePath}`] = `${fullPath}`;
       }
     }
