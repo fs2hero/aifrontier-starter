@@ -8,3 +8,4 @@ acefox
 dist
 build
 sea-config.*
+install-local
