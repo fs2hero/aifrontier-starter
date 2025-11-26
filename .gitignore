@@ -9,3 +9,4 @@ dist
 build
 sea-config.*
 install-local
+*.bak
