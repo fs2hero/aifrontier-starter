@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# 修改 codesign 和 xcrun notarytool submit 里的值为正确的值
+
+# 清理旧构建
+rm -rf dist/out/AIFrontier.app
+rm -f dist/AIFrontier-1.0.0.dmg
+
+# 构建应用
+# 这里替换为你的构建命令，比如：
+./pkg-dmg.sh
+# 或者
+# electron-builder --mac
+
+# 签名应用
+codesign --force --verbose --timestamp --options runtime \
+  --entitlements entitlements.plist \
+  --sign "Developer ID Application: your name (TEAMID)" \
+  ./dist/out/AIFrontier.app
+
+# 验证签名
+codesign -vvv --deep --strict ./dist/out/AIFrontier.app
+
+# 打包准备公证
+ditto -c -k --keepParent ./dist/out/AIFrontier.app ./dist/AIFrontier.zip
+
+# 提交公证
+echo "Submitting for notarization..."
+xcrun notarytool submit ./dist/AIFrontier.zip \
+  --apple-id "your-email@example.com" \
+  --password "app-specific-password" \
+  --team-id "TEAMID" \
+  --wait
+
+# 装订公证票证
+echo "Stapling notarization ticket..."
+xcrun stapler staple ./dist/out/AIFrontier.app
+
+# 最终验证
+echo "Validating notarization..."
+xcrun stapler validate ./dist/out/AIFrontier.app
+
+echo "Notarization complete! App is ready for distribution."

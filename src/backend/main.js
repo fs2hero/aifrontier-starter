@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 const { existsSync, chmodSync, writeFileSync, readFileSync } = require('fs');
 const { getAsset, isSea } = require('node:sea');
 const { unzip } = require('./zip.js')
-const { getUserDir, ensureDirSync } = require('./sys_utils.js')
+const { getUserDir, ensureDirSync, isWin } = require('./sys_utils.js')
 
 const app = express()
 let aaProcess;
@@ -460,10 +460,14 @@ async function launchFirefox(url) {
     firefoxProcess.on('exit', (code) => {
       console.log('Server exited with code', code);
 
-      // if(aaProcess) {
-      //   aaProcess.kill();
-      // }
-      // process.exit(code)
+      if(isWin()) {
+        return;
+      }
+      
+      if(aaProcess) {
+        aaProcess.kill();
+      }
+      process.exit(code)
     });
 
     // 可选：等待一段时间检查进程是否正常运行

@@ -8,5 +8,6 @@ acefox
 dist
 build
 sea-config.*
+sign-and-notarize.sh
 install-local
 *.bak
