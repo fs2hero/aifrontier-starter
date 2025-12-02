@@ -14,6 +14,8 @@ class CoreutilsInstaller {
     this.silent = options.silent !== false;
     this.installMethod = options.installMethod || 'auto';
     this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+    this.logger =  options.logger ? options.logger : (msg) => console.log(msg);
   }
 
   // 检查是否已安装 coreutils
@@ -123,7 +125,7 @@ class CoreutilsInstaller {
 
   // 安装 Git for Windows (包含 coreutils)
   async installGitBash() {
-    console.log('📦 Installing Git for Windows (includes coreutils)...');
+    this.logger('📦 Installing Git for Windows (includes coreutils)...');
 
     const tempDir = os.tmpdir();
     const downloadUrl = 'https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe';
@@ -133,7 +135,7 @@ class CoreutilsInstaller {
       // 下载
       await this.downloadFile(downloadUrl, installerPath);
       
-      console.log('🔧 Installing Git for Windows...');
+      this.logger('🔧 Installing Git for Windows...');
       
       // 静默安装参数
       const args = [
@@ -153,8 +155,8 @@ class CoreutilsInstaller {
 
         installProcess.on('close', (code) => {
           if (code === 0) {
-            console.log('✅ Git for Windows installed successfully!');
-            console.log('💡 Coreutils are available in Git Bash and added to PATH');
+            this.logger('✅ Git for Windows installed successfully!');
+            this.logger('💡 Coreutils are available in Git Bash and added to PATH');
             resolve(true);
           } else {
             reject(new Error(`Git installation failed with exit code: ${code}`));
@@ -175,7 +177,7 @@ class CoreutilsInstaller {
 
   // 通过 Chocolatey 安装 coreutils
   async installWithChocolatey() {
-    console.log('🍫 Installing coreutils via Chocolatey...');
+    this.logger('🍫 Installing coreutils via Chocolatey...');
 
     try {
       // 检查 Chocolatey 是否已安装
@@ -189,7 +191,7 @@ class CoreutilsInstaller {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
-      console.log('✅ Coreutils installed via Chocolatey!');
+      this.logger('✅ Coreutils installed via Chocolatey!');
       return true;
 
     } catch (error) {
@@ -199,30 +201,30 @@ class CoreutilsInstaller {
 
   // 安装 WSL (Windows Subsystem for Linux)
   async installWSL() {
-    console.log('🐧 Installing Windows Subsystem for Linux...');
+    this.logger('🐧 Installing Windows Subsystem for Linux...');
 
     try {
       // 检查是否已启用 WSL
       try {
         execSync('wsl --list', { stdio: 'ignore' });
-        console.log('✅ WSL is already installed');
+        this.logger('✅ WSL is already installed');
         return true;
       } catch {}
 
       // 启用 WSL 功能
-      console.log('🔧 Enabling WSL feature...');
+      this.logger('🔧 Enabling WSL feature...');
       execSync('dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
       // 安装默认的 Linux 发行版 (Ubuntu)
-      console.log('📥 Installing Ubuntu...');
+      this.logger('📥 Installing Ubuntu...');
       execSync('wsl --install -d Ubuntu', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
-      console.log('✅ WSL installed successfully!');
-      console.log('💡 Coreutils are available in WSL Ubuntu environment');
+      this.logger('✅ WSL installed successfully!');
+      this.logger('💡 Coreutils are available in WSL Ubuntu environment');
       return true;
 
     } catch (error) {
@@ -232,19 +234,19 @@ class CoreutilsInstaller {
 
   // Unix-like 系统安装/更新 coreutils
   async installOnUnix() {
-    console.log('🔧 Ensuring coreutils are available...');
+    this.logger('🔧 Ensuring coreutils are available...');
 
     try {
       if (this.platform === 'darwin') {
         // macOS: 使用 Homebrew 安装最新版本
         try {
           execSync('brew --version', { stdio: 'ignore' });
-          console.log('📦 Updating coreutils via Homebrew...');
+          this.logger('📦 Updating coreutils via Homebrew...');
           execSync('brew install coreutils', {
             stdio: this.silent ? 'ignore' : 'inherit'
           });
         } catch {
-          console.log('ℹ️  Coreutils are available via system commands');
+          this.logger('ℹ️  Coreutils are available via system commands');
         }
       } else {
         // Linux: 使用包管理器
@@ -266,11 +268,11 @@ class CoreutilsInstaller {
         }
       }
 
-      console.log('✅ Coreutils are ready!');
+      this.logger('✅ Coreutils are ready!');
       return true;
 
     } catch (error) {
-      console.warn('⚠️  Coreutils setup note:', error.message);
+      this.logger(`⚠️  Coreutils setup note:, ${error.message}`);
       return true; // Unix-like 系统通常已有基本 coreutils
     }
   }
@@ -360,7 +362,7 @@ class CoreutilsInstaller {
       }
 
       if (availableTools.length > 0) {
-        console.log(`✅ Coreutils available: ${availableTools.join(', ')}`);
+        this.logger(`✅ Coreutils available: ${availableTools.join(', ')}`);
         return true;
       } else {
         throw new Error('No coreutils tools found');
@@ -374,42 +376,42 @@ class CoreutilsInstaller {
 
   // 显示使用信息
   showUsageInfo(installMethod) {
-    console.log('\n🎉 Coreutils installation completed!');
-    console.log('\n📋 Usage information:');
+    this.logger('\n🎉 Coreutils installation completed!');
+    this.logger('\n📋 Usage information:');
     
     switch (installMethod) {
       case 'git-bash':
-        console.log('• Use Git Bash for full Unix-like experience');
-        console.log('• Coreutils are available in Git Bash and Windows Command Prompt');
-        console.log('• Common commands: ls, grep, find, sed, awk, wc, sort');
+        this.logger('• Use Git Bash for full Unix-like experience');
+        this.logger('• Coreutils are available in Git Bash and Windows Command Prompt');
+        this.logger('• Common commands: ls, grep, find, sed, awk, wc, sort');
         break;
       case 'wsl':
-        console.log('• Use WSL for full Linux environment');
-        console.log('• Run: wsl  to enter Linux environment');
-        console.log('• All standard coreutils are available');
+        this.logger('• Use WSL for full Linux environment');
+        this.logger('• Run: wsl  to enter Linux environment');
+        this.logger('• All standard coreutils are available');
         break;
       case 'chocolatey':
-        console.log('• Coreutils are available in Windows Command Prompt');
-        console.log('• Use standard Unix commands directly');
+        this.logger('• Coreutils are available in Windows Command Prompt');
+        this.logger('• Use standard Unix commands directly');
         break;
       default:
-        console.log('• Coreutils are now available in your terminal');
+        this.logger('• Coreutils are now available in your terminal');
     }
     
-    console.log('\n🔧 Test commands:');
-    console.log('   ls -la');
-    console.log('   grep "pattern" filename');
-    console.log('   find . -name "*.txt"');
+    this.logger('\n🔧 Test commands:');
+    this.logger('   ls -la');
+    this.logger('   grep "pattern" filename');
+    this.logger('   find . -name "*.txt"');
   }
 
   // 主安装方法
   async install() {
-    console.log(`🚀 Setting up coreutils for ${this.platform}-${this.arch}...`);
+    this.logger(`🚀 Setting up coreutils for ${this.platform}-${this.arch}...`);
 
     // 检查是否已安装
     if (this.isCoreutilsInstalled()) {
       const env = this.detectCoreutilsEnvironment();
-      console.log(`ℹ️  Coreutils are already available via ${env || 'system'}`);
+      this.logger(`ℹ️  Coreutils are already available via ${env || 'system'}`);
       this.showUsageInfo(env);
       return;
     }
@@ -425,7 +427,7 @@ class CoreutilsInstaller {
     // Windows 系统安装
     try {
       const recommendedMethod = this.getRecommendedInstallMethod();
-      console.log(`💡 Recommended installation method: ${recommendedMethod}`);
+      this.logger(`💡 Recommended installation method: ${recommendedMethod}`);
 
       let success = false;
       let usedMethod = this.installMethod === 'auto' ? recommendedMethod : this.installMethod;
@@ -449,17 +451,17 @@ class CoreutilsInstaller {
         if (verified) {
           this.showUsageInfo(usedMethod);
         } else {
-          console.log('⚠️  Installation completed but verification failed');
-          console.log('💡 You may need to restart your terminal');
+          this.logger('⚠️  Installation completed but verification failed');
+          this.logger('💡 You may need to restart your terminal');
         }
       }
 
     } catch (error) {
       console.error('❌ Installation failed:', error.message);
-      console.log('\n💡 Alternative options:');
-      console.log('1. Install Git for Windows: https://git-scm.com/download/win');
-      console.log('2. Enable WSL: https://docs.microsoft.com/en-us/windows/wsl/install');
-      console.log('3. Use Chocolatey: choco install coreutils');
+      this.logger('\n💡 Alternative options:');
+      this.logger('1. Install Git for Windows: https://git-scm.com/download/win');
+      this.logger('2. Enable WSL: https://docs.microsoft.com/en-us/windows/wsl/install');
+      this.logger('3. Use Chocolatey: choco install coreutils');
       
       process.exit(1);
     }

@@ -64,6 +64,10 @@ async function linkDir(srcDir, dstDir) {
 	}
 }
 
+async function removeDirOrFile(targetPath) {
+	await fsp.rm(targetPath, { recursive: true, force: true });
+}
+
 // 获取最新的环境变量
 async function getFreshEnvironment() {
   try {
@@ -207,5 +211,6 @@ module.exports = {
     isWin,
     isArm,
     copyDirWithReplace,
-    linkDir
+    linkDir,
+    removeDirOrFile
 };

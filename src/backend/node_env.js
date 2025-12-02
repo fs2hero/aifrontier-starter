@@ -12,6 +12,7 @@ class NodeInstaller {
     this.arch = os.arch();
     this.version = process.env.NODE_VERSION || '18.17.0';
     this.installDir = process.env.NODE_INSTALL_DIR || path.join(process.cwd(), 'node-runtime');
+    this.logger = (msg) => console.log(msg);
   }
 
   // 获取平台特定的下载信息
@@ -56,7 +57,7 @@ class NodeInstaller {
   // 下载文件
   async downloadFile(url, destination) {
     return new Promise((resolve, reject) => {
-      console.log(`Downloading from: ${url}`);
+      this.logger(`Downloading from: ${url}`);
       
       const file = fs.createWriteStream(destination);
       https.get(url, (response) => {
@@ -88,7 +89,7 @@ class NodeInstaller {
 
         file.on('finish', () => {
           file.close();
-          console.log('\nDownload completed!');
+          this.logger('\nDownload completed!');
           resolve();
         });
 
@@ -102,7 +103,7 @@ class NodeInstaller {
 
   // 解压文件
   async extractFile(filePath, extractTo) {
-    console.log(`Extracting ${filePath}...`);
+    this.logger(`Extracting ${filePath}...`);
     
     const platform = this.platform;
     const fileExt = path.extname(filePath);
@@ -189,7 +190,7 @@ class NodeInstaller {
       fs.chmodSync(scriptPath, '755');
     }
 
-    console.log(`Start script created: ${scriptPath}`);
+    this.logger(`Start script created: ${scriptPath}`);
   }
 
   createWindowsScript(binDir) {
@@ -212,8 +213,8 @@ exec "$SHELL"
       const version = execSync(`"${nodePath}" --version`, { encoding: 'utf8' }).trim();
       const npmVersion = execSync(`"${npmPath}" --version`, { encoding: 'utf8' }).trim();
       
-      console.log(`✅ Node.js ${version} installed successfully!`);
-      console.log(`✅ npm ${npmVersion} installed successfully!`);
+      this.logger(`✅ Node.js ${version} installed successfully!`);
+      this.logger(`✅ npm ${npmVersion} installed successfully!`);
       return true;
     } catch (error) {
       console.error('❌ Installation verification failed:', error.message);
@@ -223,8 +224,8 @@ exec "$SHELL"
 
   // 主安装方法
   async install() {
-    console.log(`Installing Node.js ${this.version} for ${this.platform}-${this.arch}`);
-    console.log(`Installation directory: ${this.installDir}`);
+    this.logger(`Installing Node.js ${this.version} for ${this.platform}-${this.arch}`);
+    this.logger(`Installation directory: ${this.installDir}`);
 
     // 创建安装目录
     if (!fs.existsSync(this.installDir)) {
@@ -233,6 +234,15 @@ exec "$SHELL"
 
     const downloadInfo = this.getDownloadInfo();
     const downloadPath = path.join(this.installDir, downloadInfo.filename);
+
+    const nodeDir = path.join(this.installDir, downloadInfo.extractDir);
+    const binDir = path.join(nodeDir, downloadInfo.binaryDir);
+    const nodePath = path.join(binDir, downloadInfo.executable);
+
+    if(fs.existsSync(nodePath)) {
+      this.logger(`ℹ️  node is already installed: ${binDir}`);
+      return;
+    }
 
     try {
       // 下载
@@ -248,12 +258,12 @@ exec "$SHELL"
       const success = this.verifyInstallation(paths.nodePath,  paths.npmPath);
       
       if (success) {
-        console.log('\n🎉 Installation completed!');
-        console.log(`\nTo use this Node.js installation, run:`);
+        this.logger('\n🎉 Installation completed!');
+        this.logger(`\nTo use this Node.js installation, run:`);
         if (this.platform === 'win32') {
-          console.log(`  ${path.join(this.installDir, 'use-node.bat')}`);
+          this.logger(`  ${path.join(this.installDir, 'use-node.bat')}`);
         } else {
-          console.log(`  source ${path.join(this.installDir, 'use-node.sh')}`);
+          this.logger(`  source ${path.join(this.installDir, 'use-node.sh')}`);
         }
       }
 

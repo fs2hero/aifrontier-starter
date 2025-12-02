@@ -14,6 +14,8 @@ class CurlInstaller {
     this.silent = options.silent !== false;
     this.useSystemPackageManager = options.useSystemPackageManager !== false;
     this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+    this.logger = options.logger ? options.logger : (msg) => console.log(msg);
   }
 
   // 检查系统是否已安装 curl
@@ -57,7 +59,7 @@ class CurlInstaller {
 
   // 使用系统包管理器安装
   async installWithPackageManager() {
-    console.log('📦 Installing curl using system package manager...');
+    this.logger('📦 Installing curl using system package manager...');
 
     try {
       switch (this.platform) {
@@ -65,19 +67,19 @@ class CurlInstaller {
           // 检测 Linux 发行版
           if (fs.existsSync('/etc/debian_version')) {
             // Debian/Ubuntu
-            console.log('🐧 Debian/Ubuntu detected, using apt...');
+            this.logger('🐧 Debian/Ubuntu detected, using apt...');
             execSync('sudo apt update && sudo apt install -y curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
           } else if (fs.existsSync('/etc/redhat-release') || fs.existsSync('/etc/centos-release')) {
             // RedHat/CentOS
-            console.log('🎩 RedHat/CentOS detected, using yum...');
+            this.logger('🎩 RedHat/CentOS detected, using yum...');
             execSync('sudo yum install -y curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
           } else if (fs.existsSync('/etc/alpine-release')) {
             // Alpine Linux
-            console.log('🏔️ Alpine Linux detected, using apk...');
+            this.logger('🏔️ Alpine Linux detected, using apk...');
             execSync('sudo apk add curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
@@ -88,12 +90,12 @@ class CurlInstaller {
 
         case 'darwin':
           // macOS
-          console.log('🍎 macOS detected, using Homebrew...');
+          this.logger('🍎 macOS detected, using Homebrew...');
           try {
             // 检查是否已安装 Homebrew
             execSync('which brew', { stdio: 'ignore' });
           } catch {
-            console.log('🔧 Installing Homebrew first...');
+            this.logger('🔧 Installing Homebrew first...');
             const brewInstallScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
             execSync(brewInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
           }
@@ -111,28 +113,28 @@ class CurlInstaller {
           throw new Error(`Unsupported platform: ${this.platform}`);
       }
 
-      console.log('✅ Package manager installation completed!');
+      this.logger('✅ Package manager installation completed!');
       return true;
     } catch (error) {
-      console.warn(`⚠️ Package manager installation failed: ${error.message}`);
+      this.logger(`⚠️ Package manager installation failed: ${error.message}`);
       return false;
     }
   }
 
   // Windows 安装
   async installOnWindows() {
-    console.log('🪟 Installing curl on Windows...');
+    this.logger('🪟 Installing curl on Windows...');
 
     try {
       // 尝试使用 Winget (Windows 11/10 1809+)
       try {
-        console.log(' Trying winget...');
+        this.logger(' Trying winget...');
         execSync('winget install --id curl.curl -e', { 
           stdio: this.silent ? 'ignore' : 'inherit' 
         });
         return true;
       } catch (wingetError) {
-        console.log(' Winget failed, trying Chocolatey...');
+        this.logger(' Winget failed, trying Chocolatey...');
       }
 
       // 尝试使用 Chocolatey
@@ -140,7 +142,7 @@ class CurlInstaller {
         // 检查是否已安装 Chocolatey
         execSync('choco --version', { stdio: 'ignore' });
       } catch {
-        console.log('🔧 Installing Chocolatey first...');
+        this.logger('🔧 Installing Chocolatey first...');
         const chocoInstallScript = 'powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString(\'https://community.chocolatey.org/install.ps1\'))"';
         execSync(chocoInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
       }
@@ -151,14 +153,14 @@ class CurlInstaller {
       return true;
 
     } catch (error) {
-      console.warn('⚠️ Windows package manager installation failed, falling back to direct download...');
+      this.logger('⚠️ Windows package manager installation failed, falling back to direct download...');
       return await this.downloadWindowsBinary();
     }
   }
 
   // 下载 Windows 绿色版
   async downloadWindowsBinary() {
-    console.log('💾 Downloading Windows curl binary...');
+    this.logger('💾 Downloading Windows curl binary...');
 
     const tempDir = os.tmpdir();
     const downloadUrl = 'https://curl.se/windows/dl-8.5.0/curl-8.5.0-win64-mingw.zip';
@@ -199,7 +201,7 @@ class CurlInstaller {
         // 添加到系统 PATH
         await this.addToWindowsPath(path.join(targetDir, 'bin'));
         
-        console.log('✅ Windows binary installation completed!');
+        this.logger('✅ Windows binary installation completed!');
         return true;
       } else {
         throw new Error('Could not find curl directory in extracted files');
@@ -218,7 +220,7 @@ class CurlInstaller {
   async downloadFile(url, destination, retries = 3) {
     return new Promise((resolve, reject) => {
       const attemptDownload = (attempt = 1) => {
-        console.log(`📥 Downloading from: ${url} (attempt ${attempt}/${retries})`);
+        this.logger(`📥 Downloading from: ${url} (attempt ${attempt}/${retries})`);
         
         const file = fs.createWriteStream(destination);
         const protocol = url.startsWith('https') ? https : http;
@@ -249,7 +251,7 @@ class CurlInstaller {
               fs.unlinkSync(destination);
             }
             if (attempt < retries) {
-              console.log(`⚠️  Got ${response.statusCode}, retrying... (${attempt}/${retries})`);
+              this.logger(`⚠️  Got ${response.statusCode}, retrying... (${attempt}/${retries})`);
               setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
             } else {
               reject(new Error(`Download failed with status: ${response.statusCode}`));
@@ -272,7 +274,7 @@ class CurlInstaller {
 
           file.on('finish', () => {
             file.close();
-            if (!this.silent) console.log('\n✅ Download completed!');
+            if (!this.silent) this.logger('\n✅ Download completed!');
             resolve();
           });
 
@@ -289,7 +291,7 @@ class CurlInstaller {
             fs.unlinkSync(destination);
           }
           if (attempt < retries) {
-            console.log(`⚠️  Network error, retrying... (${attempt}/${retries})`);
+            this.logger(`⚠️  Network error, retrying... (${attempt}/${retries})`);
             setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
           } else {
             reject(err);
@@ -299,7 +301,7 @@ class CurlInstaller {
         request.setTimeout(30000, () => {
           request.destroy();
           if (attempt < retries) {
-            console.log(`⚠️  Timeout, retrying... (${attempt}/${retries})`);
+            this.logger(`⚠️  Timeout, retrying... (${attempt}/${retries})`);
             setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
           } else {
             reject(new Error('Download timeout'));
@@ -313,7 +315,7 @@ class CurlInstaller {
 
   // 解压 ZIP 文件
   async extractZip(zipPath, extractDir) {
-    console.log('📦 Extracting files...');
+    this.logger('📦 Extracting files...');
     
     try {
       // 使用系统工具解压
@@ -357,7 +359,7 @@ class CurlInstaller {
   // 添加到 Windows PATH
   async addToWindowsPath(binDir) {
     try {
-      console.log(`🔧 Adding to Windows PATH: ${binDir}`);
+      this.logger(`🔧 Adding to Windows PATH: ${binDir}`);
       
       // 获取当前用户 PATH
       const currentPath = execSync('reg query "HKCU\\Environment" /v PATH', { encoding: 'utf8' });
@@ -374,12 +376,12 @@ class CurlInstaller {
       if (!userPath.includes(binDir)) {
         const newPath = userPath ? `${userPath};${binDir}` : binDir;
         execSync(`setx PATH "${newPath}"`, { stdio: 'inherit' });
-        console.log('✅ Added to Windows PATH');
+        this.logger('✅ Added to Windows PATH');
       } else {
-        console.log('ℹ️  PATH already contains curl directory');
+        this.logger('ℹ️  PATH already contains curl directory');
       }
     } catch (error) {
-      console.warn('⚠️  Failed to update Windows PATH:', error.message);
+      this.logger(`⚠️  Failed to update Windows PATH:, ${error.message}`);
     }
   }
 
@@ -388,7 +390,7 @@ class CurlInstaller {
     try {
       if (this.isCurlInstalled()) {
         const version = this.getCurlVersion();
-        console.log(`✅ curl installed successfully: ${version}`);
+        this.logger(`✅ curl installed successfully: ${version}`);
         return true;
       } else {
         throw new Error('curl is not available in PATH');
@@ -404,11 +406,11 @@ class CurlInstaller {
     // 检查是否已安装
     if (this.isCurlInstalled()) {
       const version = this.getCurlVersion();
-      console.log(`ℹ️  curl is already installed: ${version}`);
+      this.logger(`ℹ️  curl is already installed: ${version}`);
       return;
     }
 
-    console.log(`🚀 Starting curl installation for ${this.platform}-${this.arch}...`);
+    this.logger(`🚀 Starting curl installation for ${this.platform}-${this.arch}...`);
 
     let success = false;
 
@@ -419,21 +421,21 @@ class CurlInstaller {
 
     // 如果包管理器失败，回退到其他方法
     if (!success) {
-      console.log('🔄 Falling back to alternative installation method...');
+      this.logger('🔄 Falling back to alternative installation method...');
       
       switch (this.platform) {
         case 'win32':
           success = await this.downloadWindowsBinary();
           break;
         case 'linux':
-          console.log('💡 On Linux, you can manually install with:');
-          console.log('   Ubuntu/Debian: sudo apt install curl');
-          console.log('   RedHat/CentOS: sudo yum install curl');
-          console.log('   Alpine: sudo apk add curl');
+          this.logger('💡 On Linux, you can manually install with:');
+          this.logger('   Ubuntu/Debian: sudo apt install curl');
+          this.logger('   RedHat/CentOS: sudo yum install curl');
+          this.logger('   Alpine: sudo apk add curl');
           break;
         case 'darwin':
-          console.log('💡 On macOS, you can manually install with:');
-          console.log('   brew install curl');
+          this.logger('💡 On macOS, you can manually install with:');
+          this.logger('   brew install curl');
           break;
       }
     }
@@ -443,10 +445,10 @@ class CurlInstaller {
       const verified = await this.verifyInstallation();
       
       if (verified) {
-        console.log('\n🎉 curl installation completed successfully!');
-        console.log('\n📋 Next steps:');
-        console.log('1. Restart your terminal');
-        console.log('2. Test: curl --version');
+        this.logger('\n🎉 curl installation completed successfully!');
+        this.logger('\n📋 Next steps:');
+        this.logger('1. Restart your terminal');
+        this.logger('2. Test: curl --version');
       } else {
         throw new Error('Installation verification failed');
       }

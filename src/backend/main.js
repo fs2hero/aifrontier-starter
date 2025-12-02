@@ -2,10 +2,15 @@ const express = require('express')
 const path = require('path')
 const { fileURLToPath } = require('url');
 const { spawn } = require('child_process');
-const { existsSync, chmodSync, writeFileSync, readFileSync } = require('fs');
+const { existsSync, chmodSync, writeFileSync, readFileSync, rename } = require('fs');
 const { getAsset, isSea } = require('node:sea');
-const { unzip } = require('./zip.js')
-const { getUserDir, ensureDirSync, isWin } = require('./sys_utils.js')
+const { unzip } = require('./zip.js');
+const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile } = require('./sys_utils.js');
+const NodeInstaller = require('./node_env.js');
+const MinicondaInstaller = require('./miniconda_env.js');
+const PackageManagerInstaller = require('./package_manager_env.js');
+const CurlInstaller = require('./curl_env.js');
+const CoreutilsInstaller = require('./coreutils_env.js');
 
 const app = express()
 let aaProcess;
@@ -108,7 +113,7 @@ function runBashScript(script,cwd) {
 //     });
 //   });
 // }
-function runShell(script, cwd) {
+function runShell(script, cwd, logger) {
   const isWin = process.platform === "win32";
 
   return new Promise((resolve, reject) => {
@@ -135,10 +140,14 @@ function runShell(script, cwd) {
     child.stdout.on("data", (d) => {
       stdout += d.toString();
       console.log(`[runShell] ${d}`);
+
+      logger && logger(d.toString())
     });
     child.stderr.on("data", (d) => {
       stderr += d.toString();
       console.log(`[runShell] ${d}`);
+
+      logger && logger(d.toString())
     });
 
     child.on("close", (code) => {
@@ -150,76 +159,73 @@ function runShell(script, cwd) {
 
 
 
-async function getNodePath(userDataDir,v){
-	let nodePath;
-	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
-	if (!existsSync(nodePathCache)) {
-		return null;
-	}
-	nodePath = readFileSync(nodePathCache, 'utf8').trim();
-	if (!existsSync(nodePath)){
-		return null;
-	}
-	return nodePath;
-}
+// async function getNodePath(userDataDir,v){
+// 	let nodePath;
+// 	const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+// 	if (!existsSync(nodePathCache)) {
+// 		return null;
+// 	}
+// 	nodePath = readFileSync(nodePathCache, 'utf8').trim();
+// 	if (!existsSync(nodePath)){
+// 		return null;
+// 	}
+// 	return nodePath;
+// }
 
-async function installNode(userDataDir, v, install = true) {
+// async function installNode(userDataDir, v, install = true) {
+//   const isWin = process.platform === "win32";
+//   const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
+
+//   let script;
+//   if (isWin) {
+//     // script = install
+//     //   ? `nvm install ${v}; nvm use ${v}; where.exe node`
+//     //   : `nvm use ${v}; where.exe node`;
+//     script = install
+//     ? `nvm install ${v} && nvm use ${v} && where node`
+//     : `nvm use ${v} && where node`;
+//   } else {
+//     script = `
+//       unset npm_config_prefix
+//       export NVM_DIR="$HOME/.nvm"
+//       [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+//       ${install ? `nvm install ${v}` : ""}
+//       nvm use ${v}
+//       which node
+//     `;
+//   }
+
+//   try {
+//     const output = await runShell(script);
+//     const nodePath = output.trim().split("\n").at(-1).trim();
+//     writeFileSync(nodePathCache, nodePath);
+//     console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
+//     return nodePath;
+//   } catch (err) {
+//     console.error(err);
+//     return null;
+//   }
+// }
+
+
+async function installNodePackages(userDataDir, nodeVersion, res) {
   const isWin = process.platform === "win32";
-  const nodePathCache = path.join(userDataDir, `.nvm_node_path_${v}`);
-
-  let script;
-  if (isWin) {
-    // script = install
-    //   ? `nvm install ${v}; nvm use ${v}; where.exe node`
-    //   : `nvm use ${v}; where.exe node`;
-    script = install
-    ? `nvm install ${v} && nvm use ${v} && where node`
-    : `nvm use ${v} && where node`;
-  } else {
-    script = `
-      unset npm_config_prefix
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      ${install ? `nvm install ${v}` : ""}
-      nvm use ${v}
-      which node
-    `;
-  }
-
-  try {
-    const output = await runShell(script);
-    const nodePath = output.trim().split("\n").at(-1).trim();
-    writeFileSync(nodePathCache, nodePath);
-    console.log(`[NVM] 缓存 node 路径: ${nodePath}`);
-    return nodePath;
-  } catch (err) {
-    console.error(err);
-    return null;
-  }
-}
-
-
-async function installNodePackages(userDataDir, nodeVersion) {
-  const isWin = process.platform === "win32";
   let script;
 
   if (isWin) {
     script = `
-      nvm use ${nodeVersion}
       npm install
     `;
   } else {
     script = `
-      unset npm_config_prefix
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      nvm use ${nodeVersion}
       npm install
     `;
   }
 
   try {
-    await runShell(script, userDataDir);
+    await runShell(script, userDataDir, (log) => {
+      sendSSELog(res,log)
+    });
     return true;
   } catch (err) {
     return false;
@@ -405,27 +411,215 @@ function isHtmlRequest(path) {
   return !path.includes('.') || path.endsWith('/');
 }
 
+function readJson(filePath){
+	try {
+		if (!existsSync(filePath)) {
+			console.error(`File not found: ${filePath}`)
+			return null
+		}
+		const fileContent = readFileSync(filePath, 'utf8')
+		try {
+			const jsonData = JSON.parse(fileContent)
+			return jsonData
+		} catch (parseError) {
+			console.error(`Error parsing JSON from ${filePath}:`, parseError)
+			return null
+		}
+	} catch (readError) {
+		console.error(`Error reading file ${filePath}:`, readError)
+		return null
+	}
+}
 
-async function extractBundle() {
-  if(!isSea()) {
+function writeJson(filePath, data) {
+  writeFileSync(filePath, data, 'utf-8');
+}
+
+function safeParseJson(str) {
+  if (!str) {
+    console.error(`data is empty: ${str}`)
+    return null
+  }
+
+  try {
+    const jsonData = JSON.parse(str)
+    return jsonData
+  } catch (parseError) {
+    console.error(`Error parsing JSON from ${str}:`, parseError)
+    return null
+  }
+}
+
+async function extractBundle(targetDir, srcDir) {
+  // if(!isSea()) {
+  //   return;
+  // }
+  const seaMode = isSea();
+
+  // const userDir = getUserDir();
+  // const targetDir = path.join(userDir.appData,'aifrontier','server');
+  // const srcDir = path.join(targetDir, 'src')
+
+  // if(existsSync(srcDir)) {
+  //   checkAndUpgradeBundle(targetDir, srcDir)
+  //   return;
+  // }
+
+  ensureDirSync(srcDir)
+  if(seaMode) {
+    const bundleBuffer = getAsset('bundle/bundle.zip')
+    await unzip(Buffer.from(bundleBuffer),srcDir)
+
+    //解压缩配置文件
+    const bundleJsonStr = getAsset('bundle/bundle.json')
+    writeJson(path.join(targetDir, 'bundle.json'), convertArrayBufferToString(bundleJsonStr))
+
+    const configJsonStr = getAsset('bundle/config.json')
+    writeJson(path.join(targetDir, 'config.json'), convertArrayBufferToString(configJsonStr))
+
+    const packageJsonStr = getAsset('bundle/package.json')
+    writeJson(path.join(targetDir, 'package.json'), convertArrayBufferToString(packageJsonStr))
+  } else {
+    const cwd = process.cwd()
+    console.log(`cwd path: ${cwd}`)
+    const bundleDir = path.join(cwd,'bundle');
+    const bundleBuffer = readFileSync(path.join(bundleDir,'bundle.zip'))
+    await unzip(Buffer.from(bundleBuffer),srcDir)
+
+    //解压缩配置文件
+    const bundleJsonStr = readJson(path.join(bundleDir, 'bundle.json'))
+    writeJson(path.join(targetDir, 'bundle.json'), JSON.stringify(bundleJsonStr))
+
+    const configJsonStr = readJson(path.join(bundleDir, 'config.json'))
+    writeJson(path.join(targetDir, 'config.json'), JSON.stringify(configJsonStr))
+
+    const packageJsonStr = readJson(path.join(bundleDir, 'package.json'))
+    writeJson(path.join(targetDir, 'package.json'), JSON.stringify(packageJsonStr))
+  }
+
+}
+
+async function checkAndUpgradeBundle(targetDir, srcDir) {
+  // if(!isSea()) {
+  //   return;
+  // }
+  const cwd = process.cwd()
+  console.log(`cwd path: ${cwd}`)
+  const bundleDir = path.join(cwd,'bundle');
+
+  const seaMode = isSea();
+  const serverJson = readJson(path.join(targetDir, 'bundle.json'));
+  const bundleJson = seaMode ? safeParseJson(convertArrayBufferToString(getAsset('bundle/bundle.json'))) : readJson(path.join(bundleDir, 'bundle.json'))
+
+  if(!serverJson) {
+    console.error('checkAndUpgradeBundle error')
     return;
   }
 
-  const userDir = getUserDir();
-  const targetDir = path.join(userDir.appData,'aifrontier','server');
+  if(serverJson.build<bundleJson.build){//Upgrade package files
+    //Backup agents:
+    // this.setStartupState("Backup your agents...");
+    await removeDirOrFile(path.join(targetDir,"agents"));
+    rename(path.join(srcDir,"agents"),path.join(targetDir,"agents"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+    //await fsp.mkdir(path.join(targetDir,"agents"), { recursive: true });
+    //await copyDirWithReplace(path.join(srcDir,"agents"),path.join(targetDir,"agents"));
+    
+    //Backup file-hub:
+    // this.setStartupState("Backup your files...");
+    await removeDirOrFile(path.join(targetDir,"filehub"));
+    rename(path.join(srcDir,"filehub"),path.join(targetDir,"filehub"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+    
+    //Backup rpa-data:
+    // this.setStartupState("Backup your rpa data...");
+    await removeDirOrFile(path.join(targetDir,"rpa_data_dir"));
+    rename(path.join(srcDir,"rpa_data_dir"),path.join(targetDir,"rpa_data_dir"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+    
+    //Remove server dir
+    // this.setStartupState("Upgrading local server...");
+    await removeDirOrFile(srcDir);
 
-  if(existsSync(targetDir)) {
-    return;
+    //Unzip server dir:
+    // this.setStartupState("Unzip new bundle files...");
+
+    // const bundleBuffer = getAsset('bundle/bundle.zip')
+    // await unzip(Buffer.from(bundleBuffer),srcDir)
+    extractBundle();
+    
+    //Copy agents folder:
+    // this.setStartupState("Restore your agents...");
+    await copyDirWithReplace(path.join(srcDir,"agents"),path.join(targetDir,"agents"));
+    await removeDirOrFile(path.join(srcDir,"agents"));
+    rename(path.join(targetDir,"agents"),path.join(srcDir,"agents"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+    //await fsp.mkdir(path.join(srcDir,"agents"), { recursive: true });
+    //await copyDirWithReplace(path.join(targetDir,"agents"),path.join(srcDir,"agents"));
+    
+    // this.setStartupState("Restore your files...");
+    await removeDirOrFile(path.join(srcDir,"filehub"));
+    rename(path.join(targetDir,"filehub"), path.join(srcDir,"filehub"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+
+    // this.setStartupState("Restore your rpa data files...");
+    await removeDirOrFile(path.join(srcDir,"rpa_data_dir"));
+    rename(path.join(srcDir,"rpa_data_dir"), path.join(targetDir,"rpa_data_dir"), (err) => {
+      if (err) return console.error('Failed to move:', err);
+      console.log('Directory moved successfully');
+    });
+
+    //Ensure user-data dirs:
+    ensureDirSync(path.join(srcDir,"filehub"));
+    ensureDirSync(path.join(srcDir,"rpa_data_dir"));
+    
+    //Make frpc executable:
+    // {
+    //   // let platform=os.platform();
+    //   let frpcName;
+    //   if(isWin()){
+    //     frpcName="frpc.exe";
+    //   }else if(isMac()){
+    //     frpcName="frpc.macos";
+    //   } else if(isLinux()){
+    //     if(isArm){
+    //       frpcName="frpc.arm64";
+    //     }else{
+    //       frpcName="frpc.x86";
+    //     }
+    //   }
+    //   let frpcPath=path.join(this.serverDir,"frpc",frpcName);
+    //   if (!isWin()) {
+    //     fs.chmodSync(frpcPath, 0o755); // macOS/Linux 设置可执行权限
+    //   }
+    // }
+
+    //Copy package.json:
+    // this.setStartupState("Copy package.json file...");
+    // await copyFileToDir(path.join(this.bundleDir,"package.json"),path.join(targetDir));
+    
+    //Run npm install on userDataDir
+    // this.setStartupState("Install node packages...");
+    // await installNodePackages(targetDir);
+    
+    // this.setStartupState("Finishing up...");
+    // await copyFileToDir(path.join(this.bundleDir,"bundle.json"),targetDir);
   }
-
-  ensureDirSync(targetDir);
-  const bundleBuffer = getAsset('bundle/bundle.zip')
-  await unzip(Buffer.from(bundleBuffer),targetDir)
 }
 
 async function launchFirefox(url) {
   const userDir = getUserDir();
-  let firefoxDir = path.join(userDir.appData,'aifrontier','server');
+  let firefoxDir = path.join(userDir.appData,'aifrontier','server', 'src');
   let firefoxExe = '';
   let args = [url]; // 将 URL 作为参数
 
@@ -495,26 +689,51 @@ async function launchFirefox(url) {
   }
 }
 
-async function ai2appsStart(cb) {
+function sendSSELog(res,log) {
+  res.write(`data: ${JSON.stringify({ 
+      type: 'log', 
+      message: log,
+      timestamp: Date.now() 
+    })}\n\n`);
+}
+
+function sendSSEProgress(res,log) {
+  console.log(`[sendSSEProgress] ${log}`)
+  
+  res.write(`data: ${JSON.stringify({ 
+      type: 'progress', 
+      message: log,
+      timestamp: Date.now() 
+    })}\n\n`);
+}
+
+async function ai2appsStart(cb, res) {
+  const cwd = process.cwd()
+  console.log(`cwd path: ${cwd}`)
+  const bundleDir = path.join(cwd,'bundle');
+
   const userDir = getUserDir();
   const targetDir = path.join(userDir.appData,'aifrontier','server');
-  const inAppBundleJson = convertArrayBufferToString(getAsset('bundle/bundle.json'))
-  if(inAppBundleJson) {
-    const bundleJson = JSON.parse(inAppBundleJson);
+  const inAppBundleJson = isSea() ? safeParseJson(convertArrayBufferToString(getAsset('bundle/bundle.json'))) : readJson(path.join(bundleDir, 'bundle.json'))
+  const bundleJson = inAppBundleJson;
+  const dependenciesDir = path.join(targetDir, 'dependencies')
 
+  if(inAppBundleJson) {
     const nodeVersion=bundleJson.node;
-		let nodePath=await getNodePath(targetDir,nodeVersion);
+		let nodePath= path.join(dependenciesDir, 'node');
 		console.log(`Installing node version: ${nodeVersion}`);
-		if(!nodePath) {
-			nodePath = await installNode(targetDir, nodeVersion, !!nodePath);
-		}
+		// if(!nodePath) {
+		// 	nodePath = await installNode(targetDir, nodeVersion, !!nodePath);
+		// }
 		if(nodePath) {
 			process.env.PATH = `${path.dirname(nodePath)}:${process.env.PATH}`;
 		}
 
-    await installNodePackages(targetDir,nodeVersion);
+    sendSSEProgress(res, '检查并安装node依赖...')
+    await installNodePackages(targetDir,nodeVersion, res);
 
-    const child = spawn("node", [path.join(targetDir,"start.js")],{cwd:targetDir,env:process.env});
+    sendSSEProgress(res, '启动AA服务...')
+    const child = spawn("node", [path.join(targetDir,'src',"start.js")],{cwd:targetDir,env:process.env});
     child.stdout.on('data', async (data) => {
       const text = data.toString();
       console.log('[server]', text);
@@ -537,15 +756,99 @@ async function ai2appsStart(cb) {
   }
 }
 
+async function checkAndInstallSysDependencies(res) {
+  const cwd = process.cwd()
+  console.log(`cwd path: ${cwd}`)
+  const bundleDir = path.join(cwd,'bundle');
+
+  const userDir = getUserDir();
+  const targetDir = path.join(userDir.appData,'aifrontier','server');
+  const dependenciesDir = path.join(targetDir, 'dependencies')
+  const inAppBundleJson = isSea() ? safeParseJson(convertArrayBufferToString(getAsset('bundle/bundle.json'))) : readJson(path.join(bundleDir, 'bundle.json'))
+  const bundleJson = inAppBundleJson;
+  const nodeVersion=bundleJson.node;
+
+  ensureDirSync(dependenciesDir)
+
+  const logger = (msg) => {
+    console.log(msg);
+
+    sendSSELog(res, msg)
+  }
+
+  try {
+    sendSSEProgress(res, '检查并安装node...')
+    const nodeInstaller = new NodeInstaller();
+    nodeInstaller.version = nodeVersion;
+    nodeInstaller.installDir = dependenciesDir;
+    nodeInstaller.logger = logger;
+    await nodeInstaller.install();
+
+    sendSSEProgress(res, '检查并安装Miniconda...')
+    const condaInstaller = new MinicondaInstaller({ silent: true, logger });
+    await condaInstaller.install();
+
+    sendSSEProgress(res, '检查并安装包管理器...')
+    const pmInstaller = new PackageManagerInstaller({ logger });
+    // await pmInstaller.install();
+
+    sendSSEProgress(res, '检查并安装curl...')
+    const curlInstaller = new CurlInstaller({ logger });
+    await curlInstaller.install();
+
+    sendSSEProgress(res, '检查并安装coreutils...')
+    const coreutilsInstaller = new CoreutilsInstaller({ logger });
+    await coreutilsInstaller.install();
+  } catch(err) {
+    console.error(`checkAndInstallSysDependencies fail`,err)
+  }
+}
+
 
 app.get('/api/data', (req, res) => {
   res.json({ message: 'Hello from Node.js backend!' })
 })
 
 app.get('/api/bootstrap', async (req, res) => {
-  await ai2appsStart(() => {
-    res.json({ url: 'http://localhost:3015' })
+  // 发送心跳保持连接
+  const heartBeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 10000);
+
+  // 设置 SSE 相关头部
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*' // 允许跨域
   });
+
+  // res.write('event: connected\n');
+  res.write(`data: ${JSON.stringify({ 
+    type: 'init', 
+    message: '连接已建立',
+    timestamp: Date.now() 
+  })}\n\n`);
+
+  req.on('close', () => {
+    console.log('客户端断开');
+    clearInterval(heartBeat);
+    res.end();
+  });
+
+  sendSSEProgress(res, '检查并安装依赖中...')
+  await checkAndInstallSysDependencies(res)
+
+  await ai2appsStart(() => {
+    // res.json({ url: 'http://localhost:3015' })
+
+    res.write(`data: ${JSON.stringify({ 
+      type: 'redirect', 
+      message: 'http://localhost:3015',
+      timestamp: Date.now() 
+    })}\n\n`);
+    // res.end();
+  }, res);
   console.log(`ai2appsStart complete`)
 })
 
@@ -553,7 +856,16 @@ app.get('/api/bootstrap', async (req, res) => {
 app.listen(3000, async () => {
   console.log('Server running on http://localhost:3000')
 
-  await extractBundle();
+  const userDir = getUserDir();
+  const targetDir = path.join(userDir.appData,'aifrontier','server');
+  const srcDir = path.join(targetDir, 'src')
+
+  if(existsSync(srcDir)) {
+    await checkAndUpgradeBundle(targetDir, srcDir)
+  } else {
+    await extractBundle(targetDir, srcDir);
+  }
+  
   
   const url = 'http://localhost:3000';
   await launchFirefox(url);

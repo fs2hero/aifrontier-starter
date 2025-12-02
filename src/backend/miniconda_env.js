@@ -17,6 +17,8 @@ class MinicondaInstaller {
     this.silent = options.silent !== false;
     this.initializeShell = options.initializeShell !== false;
     this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+    this.logger = options.logger ? options.logger : (msg) => console.log(msg);
   }
 
   // 标准化路径，处理 Windows 路径问题
@@ -75,7 +77,8 @@ class MinicondaInstaller {
   async downloadFile(url, destination, retries = 3) {
     return new Promise((resolve, reject) => {
       const attemptDownload = (attempt = 1) => {
-        console.log(`📥 Downloading Miniconda from: ${url} (attempt ${attempt}/${retries})`);
+        this.logger(`📥 Downloading Miniconda from: ${url} (attempt ${attempt}/${retries})`);
+        this.logger(`➡️  Download to temp dir: ${destination}`);
         
         const file = fs.createWriteStream(destination);
         const protocol = url.startsWith('https') ? https : http;
@@ -106,7 +109,7 @@ class MinicondaInstaller {
               fs.unlinkSync(destination);
             }
             if (attempt < retries) {
-              console.log(`⚠️  Got 403, retrying... (${attempt}/${retries})`);
+              this.logger(`⚠️  Got 403, retrying... (${attempt}/${retries})`);
               setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
             } else {
               reject(new Error('Download failed: 403 Forbidden'));
@@ -138,7 +141,7 @@ class MinicondaInstaller {
 
           file.on('finish', () => {
             file.close();
-            if (!this.silent) console.log('\n✅ Download completed!');
+            if (!this.silent) this.logger('\n✅ Download completed!');
             resolve();
           });
 
@@ -155,7 +158,7 @@ class MinicondaInstaller {
             fs.unlinkSync(destination);
           }
           if (attempt < retries) {
-            console.log(`⚠️  Network error, retrying... (${attempt}/${retries})`);
+            this.logger(`⚠️  Network error, retrying... (${attempt}/${retries})`);
             setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
           } else {
             reject(err);
@@ -165,7 +168,7 @@ class MinicondaInstaller {
         request.setTimeout(30000, () => {
           request.destroy();
           if (attempt < retries) {
-            console.log(`⚠️  Timeout, retrying... (${attempt}/${retries})`);
+            this.logger(`⚠️  Timeout, retrying... (${attempt}/${retries})`);
             setTimeout(() => attemptDownload(attempt + 1), 1000 * attempt);
           } else {
             reject(new Error('Download timeout'));
@@ -206,10 +209,10 @@ class MinicondaInstaller {
   async executeInstall(installerPath) {
     return new Promise(async (resolve, reject) => {
 
-      console.log('⏳ Waiting for file to be ready...');
+      this.logger('⏳ Waiting for file to be ready...');
       await this.waitForFileAvailable(installerPath, 10000);
 
-      console.log(`🔧 Installing Miniconda to: ${this.installDir}`);
+      this.logger(`🔧 Installing Miniconda to: ${this.installDir}`);
 
       if (this.platform === 'win32') {
         // Windows 安装 - 修复参数传递
@@ -229,7 +232,7 @@ class MinicondaInstaller {
           `/D=${installDir}`  // 使用不带引号的路径
         ];
 
-        console.log(`Running: ${installerPath} ${args.join(' ')}`);
+        this.logger(`Running: ${installerPath} ${args.join(' ')}`);
 
         const installProcess = spawn(installerPath, args, {
           stdio: this.silent ? 'ignore' : 'inherit',
@@ -238,7 +241,7 @@ class MinicondaInstaller {
 
         installProcess.on('close', (code) => {
           if (code === 0) {
-            console.log('✅ Windows installation completed!');
+            this.logger('✅ Windows installation completed!');
             resolve();
           } else {
             reject(new Error(`Installation failed with exit code: ${code}`));
@@ -258,13 +261,13 @@ class MinicondaInstaller {
           fs.mkdirSync(installDir, { recursive: true });
         }
 
-        const installProcess = spawn('bash', [installerPath, '-b', '-p', installDir], {
+        const installProcess = spawn('bash', [installerPath, '-b', '-u', '-p', installDir], {
           stdio: this.silent ? 'ignore' : 'inherit'
         });
 
         installProcess.on('close', (code) => {
           if (code === 0) {
-            console.log('✅ Installation completed!');
+            this.logger('✅ Installation completed!');
             resolve();
           } else {
             reject(new Error(`Installation failed with exit code: ${code}`));
@@ -279,7 +282,7 @@ class MinicondaInstaller {
   // 修复的初始化方法
   async initializeShellConfig() {
     if (!this.initializeShell) {
-      console.log('ℹ️  Shell initialization skipped by user request');
+      this.logger('ℹ️  Shell initialization skipped by user request');
       return;
     }
 
@@ -288,29 +291,48 @@ class MinicondaInstaller {
       const actualInstallDir = this.installDir.replace(/"/g, '');
       const condaPath = path.join(actualInstallDir, this.platform === 'win32' ? 'Scripts' : 'bin', this.platform === 'win32' ? 'conda.exe' : 'conda');
       
-      console.log(`Looking for conda at: ${condaPath}`);
+      this.logger(`Looking for conda at: ${condaPath}`);
 
       if (!fs.existsSync(condaPath)) {
         throw new Error(`Conda executable not found at: ${condaPath}`);
       }
 
       if (this.platform === 'win32') {
-        console.log('Initializing for Windows...');
+        this.logger('Initializing for Windows...');
         // Windows 初始化
         execSync(`"${condaPath}" init cmd.exe`, { stdio: 'inherit' });
         execSync(`"${condaPath}" init powershell`, { stdio: 'inherit' });
       } else {
         const shell = process.env.SHELL || '';
         const initCmd = shell.includes('zsh') ? 'zsh' : 'bash';
-        console.log(`Initializing for ${initCmd}...`);
+        this.logger(`Initializing for ${initCmd}...`);
         execSync(`"${condaPath}" init ${initCmd}`, { stdio: 'inherit' });
       }
 
-      console.log('✅ Shell initialization completed!');
+      this.logger('✅ Shell initialization completed!');
     } catch (error) {
       console.warn('⚠️  Shell initialization failed:', error.message);
-      console.log('You may need to manually run: conda init');
+      this.logger('You may need to manually run: conda init');
     }
+  }
+
+  isCondaInstalled() {
+    const actualInstallDir = this.installDir.replace(/"/g, '');
+    const condaExecutable = this.platform === 'win32' 
+      ? path.join(actualInstallDir, 'Scripts', 'conda.exe')
+      : path.join(actualInstallDir, 'bin', 'conda');
+
+    if(fs.existsSync(condaExecutable)) {
+      this.logger(`conda already installed at: ${condaExecutable}`);
+      const version = execSync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
+      
+      this.logger(`✅ Miniconda installed version: ${version}`);
+
+      return true
+    } else {
+      return false;
+    }
+    
   }
 
   // 修复的验证方法
@@ -322,18 +344,18 @@ class MinicondaInstaller {
         ? path.join(actualInstallDir, 'Scripts', 'conda.exe')
         : path.join(actualInstallDir, 'bin', 'conda');
 
-      console.log(`Checking conda at: ${condaExecutable}`);
+      this.logger(`Checking conda at: ${condaExecutable}`);
 
       if (!fs.existsSync(condaExecutable)) {
         // 列出目录内容以便调试
         const dir = path.dirname(condaExecutable);
         if (fs.existsSync(dir)) {
-          console.log(`Directory contents of ${dir}:`);
+          this.logger(`Directory contents of ${dir}:`);
           try {
             const files = fs.readdirSync(dir);
-            files.forEach(file => console.log(`  - ${file}`));
+            files.forEach(file => this.logger(`  - ${file}`));
           } catch (e) {
-            console.log(`Cannot read directory: ${e.message}`);
+            this.logger(`Cannot read directory: ${e.message}`);
           }
         }
         throw new Error(`Conda executable not found at: ${condaExecutable}`);
@@ -342,8 +364,8 @@ class MinicondaInstaller {
       // 测试 conda 命令
       const version = execSync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
       
-      console.log(`✅ Miniconda installed successfully: ${version}`);
-      console.log(`📍 Installation directory: ${actualInstallDir}`);
+      this.logger(`✅ Miniconda installed successfully: ${version}`);
+      this.logger(`📍 Installation directory: ${actualInstallDir}`);
       
       return true;
     } catch (error) {
@@ -354,8 +376,8 @@ class MinicondaInstaller {
 
   // 主安装方法
   async install() {
-    console.log(`🚀 Starting Miniconda installation for ${this.platform}-${this.arch}...`);
-    console.log(`📁 Target directory: ${this.installDir}`);
+    this.logger(`🚀 Starting Miniconda installation for ${this.platform}-${this.arch}...`);
+    this.logger(`📁 Target directory: ${this.installDir}`);
 
     const tempDir = os.tmpdir();
     const downloadUrl = this.getDownloadUrl();
@@ -363,6 +385,11 @@ class MinicondaInstaller {
     const installerPath = path.join(tempDir, installerFilename);
 
     try {
+      //检查是否安装
+      if(this.isCondaInstalled()) {
+        return;
+      }
+
       // 下载
       await this.downloadFile(downloadUrl, installerPath);
       
@@ -376,18 +403,18 @@ class MinicondaInstaller {
         // 初始化
         await this.initializeShellConfig();
         
-        console.log('\n🎉 Miniconda installation completed successfully!');
-        console.log('\n📋 Next steps:');
-        console.log('1. Restart your terminal or run:');
+        this.logger('\n🎉 Miniconda installation completed successfully!');
+        this.logger('\n📋 Next steps:');
+        this.logger('1. Restart your terminal or run:');
         
         const actualInstallDir = this.installDir.replace(/"/g, '');
         if (this.platform === 'win32') {
-          console.log(`   cmd.exe /K ""${path.join(actualInstallDir, 'Scripts', 'conda.exe')}" init cmd.exe"`);
+          this.logger(`cmd.exe /K ""${path.join(actualInstallDir, 'Scripts', 'conda.exe')}" init cmd.exe"`);
         } else {
-          console.log(`   source ~/.bashrc  # or ~/.zshrc`);
+          this.logger(`source ~/.bashrc  # or ~/.zshrc`);
         }
         
-        console.log('2. Create environment: conda create -n myenv python=3.9');
+        this.logger('2. Create environment: conda create -n myenv python=3.9');
       } else {
         throw new Error('Installation verification failed');
       }

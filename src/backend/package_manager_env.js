@@ -13,6 +13,8 @@ class PackageManagerInstaller {
     this.arch = os.arch();
     this.silent = options.silent !== false;
     this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+    this.logger = options.logger ? options.logger : (msg) => console.log(msg);
   }
 
   // 检查是否已安装 Chocolatey (Windows)
@@ -52,28 +54,28 @@ class PackageManagerInstaller {
 
   // 安装 Chocolatey (Windows)
   async installChocolatey() {
-    console.log('🍫 Installing Chocolatey for Windows...');
+    this.logger('🍫 Installing Chocolatey for Windows...');
 
     try {
       // 检查 PowerShell 版本
       try {
         const psVersion = execSync('powershell -Command "$PSVersionTable.PSVersion.Major"', { encoding: 'utf8' }).trim();
-        console.log(`🔧 PowerShell version: ${psVersion}`);
+        this.logger(`🔧 PowerShell version: ${psVersion}`);
         
         if (parseInt(psVersion) < 3) {
           throw new Error('Chocolatey requires PowerShell 3.0 or later');
         }
       } catch (error) {
-        console.warn('⚠️  Could not determine PowerShell version:', error.message);
+        this.logger(`⚠️  Could not determine PowerShell version:, ${error.message}`);
       }
 
       // 检查是否以管理员权限运行
       try {
         execSync('net session', { stdio: 'ignore' });
-        console.log('✅ Running with administrator privileges');
+        this.logger('✅ Running with administrator privileges');
       } catch {
-        console.warn('⚠️  Not running as administrator. Chocolatey installation may require elevated permissions.');
-        console.log('💡 Right-click Command Prompt and select "Run as administrator"');
+        this.logger('⚠️  Not running as administrator. Chocolatey installation may require elevated permissions.');
+        this.logger('💡 Right-click Command Prompt and select "Run as administrator"');
       }
 
       // Chocolatey 安装脚本
@@ -82,7 +84,7 @@ class PackageManagerInstaller {
         iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
       `.replace(/\n/g, ' ').trim();
 
-      console.log('📥 Downloading and installing Chocolatey...');
+      this.logger('📥 Downloading and installing Chocolatey...');
       
       const args = [
         '-Command',
@@ -102,10 +104,10 @@ class PackageManagerInstaller {
               try {
                 // 验证安装
                 execSync('choco --version', { stdio: 'ignore' });
-                console.log('✅ Chocolatey installed successfully!');
+                this.logger('✅ Chocolatey installed successfully!');
                 resolve(true);
               } catch {
-                console.log('🔄 Chocolatey installed but may require restarting the terminal');
+                this.logger('🔄 Chocolatey installed but may require restarting the terminal');
                 resolve(true);
               }
             }, 3000);
@@ -124,26 +126,27 @@ class PackageManagerInstaller {
 
   // 安装 Homebrew (macOS/Linux)
   async installHomebrew() {
-    console.log('🍺 Installing Homebrew...');
+    this.logger('🍺 Installing Homebrew...');
 
     try {
       // 检查系统依赖
       await this.checkHomebrewDependencies();
 
       // Homebrew 安装脚本
-      const installScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+    //   const installScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
+      const installScript = 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
       
-      console.log('📥 Downloading and installing Homebrew...');
+      this.logger('📥 Downloading and installing Homebrew...');
       
       // 执行安装脚本
-      execSync(installScript, { 
-        stdio: this.silent ? 'ignore' : 'inherit' 
+      execSync(installScript, {
+        stdio: 'inherit' 
       });
 
       // 配置环境变量
       await this.configureHomebrewPath();
 
-      console.log('✅ Homebrew installed successfully!');
+      this.logger('✅ Homebrew installed successfully!');
       return true;
 
     } catch (error) {
@@ -159,11 +162,11 @@ class PackageManagerInstaller {
         try {
           execSync('xcode-select -p', { stdio: 'ignore' });
         } catch {
-          console.log('🔧 Installing Xcode Command Line Tools...');
+          this.logger('🔧 Installing Xcode Command Line Tools...');
           execSync('xcode-select --install', { stdio: 'inherit' });
           
           // 等待用户完成安装
-          console.log('⏳ Please complete the Xcode Command Line Tools installation and press Enter to continue...');
+          this.logger('⏳ Please complete the Xcode Command Line Tools installation and press Enter to continue...');
           process.stdin.resume();
           await new Promise(resolve => process.stdin.once('data', resolve));
         }
@@ -173,14 +176,14 @@ class PackageManagerInstaller {
         
         if (fs.existsSync('/etc/debian_version')) {
           // Debian/Ubuntu
-          console.log('🐧 Checking dependencies on Debian/Ubuntu...');
+          this.logger('🐧 Checking dependencies on Debian/Ubuntu...');
           execSync('sudo apt update', { stdio: 'ignore' });
           
           for (const pkg of dependencies) {
             try {
               execSync(`dpkg -l | grep -q ${pkg}`, { stdio: 'ignore' });
             } catch {
-              console.log(`📦 Installing ${pkg}...`);
+              this.logger(`📦 Installing ${pkg}...`);
               execSync(`sudo apt install -y ${pkg}`, { 
                 stdio: this.silent ? 'ignore' : 'inherit' 
               });
@@ -188,14 +191,14 @@ class PackageManagerInstaller {
           }
         } else if (fs.existsSync('/etc/redhat-release')) {
           // RedHat/CentOS
-          console.log('🎩 Checking dependencies on RedHat/CentOS...');
+          this.logger('🎩 Checking dependencies on RedHat/CentOS...');
           const rhDependencies = ['curl', 'git', 'gcc', 'gcc-c++', 'make'];
           
           for (const pkg of rhDependencies) {
             try {
               execSync(`rpm -q ${pkg}`, { stdio: 'ignore' });
             } catch {
-              console.log(`📦 Installing ${pkg}...`);
+              this.logger(`📦 Installing ${pkg}...`);
               execSync(`sudo yum install -y ${pkg}`, { 
                 stdio: this.silent ? 'ignore' : 'inherit' 
               });
@@ -204,7 +207,7 @@ class PackageManagerInstaller {
         }
       }
     } catch (error) {
-      console.warn('⚠️  Dependency check failed:', error.message);
+      this.logger(`⚠️  Dependency check failed:, ${error.message}`);
     }
   }
 
@@ -242,7 +245,7 @@ class PackageManagerInstaller {
       
       if (needsConfig) {
         fs.appendFileSync(profilePath, pathConfig);
-        console.log(`✅ Added Homebrew to ${profileFile}`);
+        this.logger(`✅ Added Homebrew to ${profileFile}`);
         
         // 立即生效（当前会话）
         const brewEnv = execSync(`"${brewPrefix}/bin/brew" shellenv`, { encoding: 'utf8' });
@@ -260,8 +263,8 @@ class PackageManagerInstaller {
       }
       
     } catch (error) {
-      console.warn('⚠️  Failed to configure Homebrew PATH:', error.message);
-      console.log('💡 You may need to manually add Homebrew to your shell profile');
+      this.logger(`⚠️  Failed to configure Homebrew PATH:, ${error.message}`);
+      this.logger('💡 You may need to manually add Homebrew to your shell profile');
     }
   }
 
@@ -271,13 +274,13 @@ class PackageManagerInstaller {
       if (packageManager === 'chocolatey') {
         if (this.isChocolateyInstalled()) {
           const version = this.getInstalledVersion('chocolatey');
-          console.log(`✅ ${version} installed successfully!`);
+          this.logger(`✅ ${version} installed successfully!`);
           return true;
         }
       } else if (packageManager === 'homebrew') {
         if (this.isHomebrewInstalled()) {
           const version = this.getInstalledVersion('homebrew');
-          console.log(`✅ ${version} installed successfully!`);
+          this.logger(`✅ ${version} installed successfully!`);
           return true;
         }
       }
@@ -290,35 +293,35 @@ class PackageManagerInstaller {
 
   // 显示安装后信息
   showPostInstallInfo(packageManager) {
-    console.log('\n🎉 Package manager installation completed!');
-    console.log('\n📋 Next steps:');
+    this.logger('\n🎉 Package manager installation completed!');
+    this.logger('\n📋 Next steps:');
     
     if (packageManager === 'chocolatey') {
-      console.log('1. Restart your Command Prompt or PowerShell');
-      console.log('2. Test: choco --version');
-      console.log('3. Install packages: choco install git nodejs -y');
-      console.log('4. Explore packages: choco search <package-name>');
+      this.logger('1. Restart your Command Prompt or PowerShell');
+      this.logger('2. Test: choco --version');
+      this.logger('3. Install packages: choco install git nodejs -y');
+      this.logger('4. Explore packages: choco search <package-name>');
     } else if (packageManager === 'homebrew') {
-      console.log('1. Restart your terminal or run:');
-      console.log('   source ~/.bash_profile  # or ~/.zprofile');
-      console.log('2. Test: brew --version');
-      console.log('3. Install packages: brew install git node');
-      console.log('4. Explore packages: brew search <package-name>');
+      this.logger('1. Restart your terminal or run:');
+      this.logger('   source ~/.bash_profile  # or ~/.zprofile');
+      this.logger('2. Test: brew --version');
+      this.logger('3. Install packages: brew install git node');
+      this.logger('4. Explore packages: brew search <package-name>');
     }
     
-    console.log('\n📚 Useful resources:');
+    this.logger('\n📚 Useful resources:');
     if (packageManager === 'chocolatey') {
-      console.log('   - https://chocolatey.org/docs');
-      console.log('   - https://community.chocolatey.org/packages');
+      this.logger('   - https://chocolatey.org/docs');
+      this.logger('   - https://community.chocolatey.org/packages');
     } else {
-      console.log('   - https://docs.brew.sh');
-      console.log('   - https://formulae.brew.sh');
+      this.logger('   - https://docs.brew.sh');
+      this.logger('   - https://formulae.brew.sh');
     }
   }
 
   // 主安装方法
   async install() {
-    console.log(`🚀 Starting package manager installation for ${this.platform}-${this.arch}...`);
+    this.logger(`🚀 Starting package manager installation for ${this.platform}-${this.arch}...`);
 
     let packageManager;
     let isInstalled = false;
@@ -337,7 +340,7 @@ class PackageManagerInstaller {
 
     // 如果已安装，显示信息并退出
     if (isInstalled) {
-      console.log(`ℹ️  ${installedVersion} is already installed`);
+      this.logger(`ℹ️  ${installedVersion} is already installed`);
       this.showPostInstallInfo(packageManager);
       return;
     }
@@ -369,13 +372,13 @@ class PackageManagerInstaller {
       console.error('❌ Installation failed:', error.message);
       
       // 提供备用方案
-      console.log('\n💡 Alternative installation methods:');
+      this.logger('\n💡 Alternative installation methods:');
       if (packageManager === 'chocolatey') {
-        console.log('1. Visit: https://chocolatey.org/install');
-        console.log('2. Follow the manual installation instructions');
+        this.logger('1. Visit: https://chocolatey.org/install');
+        this.logger('2. Follow the manual installation instructions');
       } else {
-        console.log('1. Visit: https://brew.sh');
-        console.log('2. Copy and paste the installation command');
+        this.logger('1. Visit: https://brew.sh');
+        this.logger('2. Copy and paste the installation command');
       }
       
       process.exit(1);
