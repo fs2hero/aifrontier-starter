@@ -932,47 +932,94 @@ app.get('/api/data', (req, res) => {
   res.json({ message: 'Hello from Node.js backend!' })
 })
 
+let isProcessing
+let aaStarted = false;
 app.get('/api/bootstrap', async (req, res) => {
-  // 发送心跳保持连接
-  const heartBeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
-  }, 10000);
+  console.log(`/api/bootstrap isProcesing:${isProcessing},aaStarted:${aaStarted}`)
 
-  // 设置 SSE 相关头部
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*' // 允许跨域
-  });
+  if(isProcessing) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*' // 允许跨域
+    });
 
-  // res.write('event: connected\n');
-  res.write(`data: ${JSON.stringify({ 
-    type: 'init', 
-    message: '连接已建立',
-    timestamp: Date.now() 
-  })}\n\n`);
+    sendSSELog(res,"启动流程正在处理中，正在重试，请稍后再试")
 
-  req.on('close', () => {
-    console.log('客户端断开');
-    clearInterval(heartBeat);
-    res.end();
-  });
+    res.write('event: server-closed\n');
+    res.write('data: isProcessing, Connection will be closed\n\n');
+    res.end(); // 关闭连接
+    return;
+  }
 
-  sendSSEProgress(res, '检查并安装依赖中...')
-  await checkAndInstallSysDependencies(res)
+  if(aaStarted) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*' // 允许跨域
+    });
 
-  await ai2appsStart(() => {
-    // res.json({ url: 'http://localhost:3015' })
-
-    res.write(`data: ${JSON.stringify({ 
+    res.write(`data: ${JSON.stringify({
       type: 'redirect', 
       message: `http://localhost:${AA_SERVICE_PORT}`,
       timestamp: Date.now() 
     })}\n\n`);
-    // res.end();
-  }, res);
-  console.log(`ai2appsStart complete, url:http://localhost:${AA_SERVICE_PORT}`)
+
+    return;
+  }
+
+  isProcessing = true
+  aaStarted = false;
+
+  try {
+    // 发送心跳保持连接
+    const heartBeat = setInterval(() => {
+      res.write(': heartbeat\n\n');
+    }, 10000);
+
+    // 设置 SSE 相关头部
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*' // 允许跨域
+    });
+
+    // res.write('event: connected\n');
+    res.write(`data: ${JSON.stringify({ 
+      type: 'init', 
+      message: '连接已建立',
+      timestamp: Date.now() 
+    })}\n\n`);
+
+    req.on('close', () => {
+      console.log('客户端断开');
+      clearInterval(heartBeat);
+      res.end();
+    });
+
+    sendSSEProgress(res, '检查并安装依赖中...')
+    await checkAndInstallSysDependencies(res)
+
+    await ai2appsStart(() => {
+      // res.json({ url: 'http://localhost:3015' })
+      aaStarted = true;
+      isProcessing = false;
+
+      res.write(`data: ${JSON.stringify({ 
+        type: 'redirect', 
+        message: `http://localhost:${AA_SERVICE_PORT}`,
+        timestamp: Date.now() 
+      })}\n\n`);
+      // res.end();
+    }, res);
+    console.log(`ai2appsStart complete, url:http://localhost:${AA_SERVICE_PORT}`)
+  } catch {
+    isProcessing = false;
+  }
+  
 })
 
 

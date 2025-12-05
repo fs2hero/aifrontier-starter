@@ -5,14 +5,14 @@ export class SSEClient {
     this.url = url;
     this.es = null;
     this.reconnectInterval = 3000;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 0;
     this.reconnectAttempts = 0;
 
     this.msgCallback = msgCb;
   }
 
   connect() {
-    console.log('正在连接到 SSE 服务器...');
+    console.log('正在连接到 SSE 服务器....');
     
     this.es = new EventSource(this.url);
     
@@ -31,8 +31,8 @@ export class SSEClient {
       }
     };
     
-    this.es.addEventListener('custom-event', (event) => {
-      console.log('自定义事件:', event.data);
+    this.es.addEventListener('server-closed', (event) => {
+      console.log('服务器关闭:', event.data);
     });
     
     this.es.onerror = (error) => {
