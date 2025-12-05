@@ -10,6 +10,7 @@ const showFullLogs = ref(false)
 // 日志数据
 const logs = ref([])
 const appProgress = ref('应用启动中...')
+const appVer = ref('0.0.0')
 
 // 最新一条日志（用于简洁模式）
 const latestLog = computed(() => {
@@ -37,13 +38,26 @@ const toggleLogs = () => {
   showFullLogs.value = !showFullLogs.value
 }
 
-onMounted(() => {
+const getAppVersion = async (params) => {
+  return fetch("api/version")
+  .then((response) => response.json())
+  .then((data) => {
+    console.log('version response ',data)
+    appVer.value = data.appVersion;
+
+    // location.replace(data?.url)
+  });
+}
+
+onMounted(async () => {
   // fetch("api/bootstrap")
   // .then((response) => response.json())
   // .then((data) => {
   //   console.log('bootstrap response ',data)
   //   location.replace(data?.url)
   // });
+  await getAppVersion();
+
   const client = new SSEClient('api/bootstrap', (data) => {
     if(data.type == 'log') {
       addLog(`${data.message}`, data.timestamp, 'success')
@@ -64,7 +78,7 @@ onMounted(() => {
         <img src="./assets/aalogo.svg" class="logo aa" alt="aa logo" />
       </a>
     </header>
-    
+    <div class="version">{{ `v${appVer}` }}</div>
     <main class="app-main">
       <HelloWorld :msg="appProgress" />
       
@@ -105,9 +119,9 @@ onMounted(() => {
 
 <style scoped>
 .app-container {
-  min-height: 100vh;
   padding: 20px;
   background-color: #f5f5f5;
+  width: 70vw;
 }
 
 .app-header {
@@ -234,5 +248,10 @@ onMounted(() => {
 }
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.version {
+  color: black;
+  text-align: left;
 }
 </style>

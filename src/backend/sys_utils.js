@@ -20,6 +20,37 @@ const isMac = () => process.platform === 'darwin';
 const isLinux = () => process.platform === 'linux';
 const isWin = () => process.platform === 'win32';
 
+async function execSyncAsync(command, options = {}) {
+  try {
+    const execPromise = promisify(exec);
+    
+    // 执行命令
+    const { stdout, stderr } = await execPromise(command, options);
+    
+    // 根据 encoding 选项决定返回类型
+    if (options.encoding === 'buffer' || options.encoding === null) {
+      // 返回 Buffer（与 execSync 一致）
+      return Buffer.from(stdout, 'binary');
+    }
+    
+    // 默认返回 string（与 execSync 一致）
+    return stdout;
+    
+  } catch (error) {
+    // 构建与 execSync 完全一致的错误对象
+    const err = new Error(`Command failed: ${command}\n${error.stderr || error.stdout || ''}`);
+    
+    // 复制所有 execSync 会设置的属性
+    if (error.code !== undefined) err.status = error.code;
+    if (error.signal !== undefined) err.signal = error.signal;
+    if (error.stderr !== undefined) err.stderr = error.stderr;
+    if (error.stdout !== undefined) err.stdout = error.stdout;
+    if (error.killed !== undefined) err.killed = error.killed;
+    
+    throw err;
+  }
+}
+
 function ensureDirSync(dirPath) {
     if (fs.existsSync(dirPath)) return;
     fs.mkdirSync(dirPath, { recursive: true });
@@ -212,5 +243,6 @@ module.exports = {
     isArm,
     copyDirWithReplace,
     linkDir,
-    removeDirOrFile
+    removeDirOrFile,
+    execAsync
 };

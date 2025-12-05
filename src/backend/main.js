@@ -13,12 +13,14 @@ const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
 const { PortChecker } = require('./port_checker.js')
 
+const APP_VER = require('../../package.json').version;
+
 const app = express()
 let aaProcess;
 
 let FIREFOX_DEBUG_PORT = 9222
 let STARTER_SERVICE_PORT = 4000
-let AA_SERVICE_PORT = 5015
+let AA_SERVICE_PORT = 3015
 
  const nodeInstaller = new NodeInstaller();
 
@@ -796,14 +798,16 @@ function sendSSELog(res,log) {
     })}\n\n`);
 }
 
+let lastStep = '';
 function sendSSEProgress(res,log) {
   console.log(`[sendSSEProgress] ${log}`)
   
+  lastStep = log;
   res.write(`data: ${JSON.stringify({ 
       type: 'progress', 
-      message: log,
+      message: lastStep,
       timestamp: Date.now() 
-    })}\n\n`);
+  })}\n\n`);
 }
 
 async function ai2appsStart(cb, res) {
@@ -913,7 +917,7 @@ async function checkAndInstallSysDependencies(res) {
 
     sendSSEProgress(res, '检查并安装包管理器...')
     const pmInstaller = new PackageManagerInstaller({ logger });
-    // await pmInstaller.install();
+    await pmInstaller.install();
 
     sendSSEProgress(res, '检查并安装curl...')
     const curlInstaller = new CurlInstaller({ logger });
@@ -932,7 +936,11 @@ app.get('/api/data', (req, res) => {
   res.json({ message: 'Hello from Node.js backend!' })
 })
 
-let isProcessing
+app.get('/api/version', (req, res) => {
+  res.json({appVersion: APP_VER})
+})
+
+let isProcessing = false;
 let aaStarted = false;
 app.get('/api/bootstrap', async (req, res) => {
   console.log(`/api/bootstrap isProcesing:${isProcessing},aaStarted:${aaStarted}`)
@@ -946,9 +954,14 @@ app.get('/api/bootstrap', async (req, res) => {
     });
 
     sendSSELog(res,"启动流程正在处理中，正在重试，请稍后再试")
+    res.write(`data: ${JSON.stringify({ 
+        type: 'progress', 
+        message: lastStep,
+        timestamp: Date.now() 
+    })}\n\n`);
 
     res.write('event: server-closed\n');
-    res.write('data: isProcessing, Connection will be closed\n\n');
+    res.write(`data: isProcessing:${isProcessing} aaStarted:${aaStarted}, Connection will be closed\n\n`);
     res.end(); // 关闭连接
     return;
   }

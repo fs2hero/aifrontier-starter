@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "dev": "vite dev src/frontend",
     "build": "vite build src/frontend",
     "obfuscate": "javascript-obfuscator ./build --output ./build-obf",
     "test": "echo \"Error: no test specified\" && exit 1",
