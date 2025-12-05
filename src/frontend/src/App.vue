@@ -44,7 +44,7 @@ onMounted(() => {
   //   console.log('bootstrap response ',data)
   //   location.replace(data?.url)
   // });
-  const client = new SSEClient('http://localhost:3000/api/bootstrap', (data) => {
+  const client = new SSEClient('api/bootstrap', (data) => {
     if(data.type == 'log') {
       addLog(`${data.message}`, data.timestamp, 'success')
     } else if(data.type == 'progress') {

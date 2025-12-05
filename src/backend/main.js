@@ -2,7 +2,7 @@ const express = require('express')
 const path = require('path')
 const { fileURLToPath } = require('url');
 const { spawn } = require('child_process');
-const { existsSync, chmodSync, writeFileSync, readFileSync, rename } = require('fs');
+const { existsSync, chmodSync, writeFileSync, readFileSync, rename, promises:fsp } = require('fs');
 const { getAsset, isSea } = require('node:sea');
 const { unzip } = require('./zip.js');
 const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile } = require('./sys_utils.js');
@@ -11,9 +11,16 @@ const MinicondaInstaller = require('./miniconda_env.js');
 const PackageManagerInstaller = require('./package_manager_env.js');
 const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
+const { PortChecker } = require('./port_checker.js')
 
 const app = express()
 let aaProcess;
+
+let FIREFOX_DEBUG_PORT = 9222
+let STARTER_SERVICE_PORT = 4000
+let AA_SERVICE_PORT = 5015
+
+ const nodeInstaller = new NodeInstaller();
 
 function runBashScript(script,cwd) {
 	return new Promise((resolve, reject) => {
@@ -211,14 +218,15 @@ function runShell(script, cwd, logger) {
 async function installNodePackages(userDataDir, nodeVersion, res) {
   const isWin = process.platform === "win32";
   let script;
+  const nodeEnvs = nodeInstaller.getEnvironment();
 
   if (isWin) {
     script = `
-      npm install
+      "${nodeEnvs.npmPath}" install
     `;
   } else {
     script = `
-      npm install
+      "${nodeEnvs.npmPath}" install
     `;
   }
 
@@ -230,6 +238,46 @@ async function installNodePackages(userDataDir, nodeVersion, res) {
   } catch (err) {
     return false;
   }
+}
+
+async function updateEnvFile(envfile, config) {
+	let content = '';
+	try {
+		content = await fsp.readFile(envfile, 'utf-8');
+	} catch (err) {
+		if (err.code === 'ENOENT') {
+			// 文件不存在则初始化为空
+			content = '';
+		} else {
+			throw err;
+		}
+	}
+	
+	const lines = content.split('\n');
+	const keys = new Set(Object.keys(config));
+	const updated = [];
+	
+	for (let line of lines) {
+		const match = line.match(/^([\w.-]+)\s*=\s*(.*)$/);
+		if (match) {
+			const key = match[1];
+			if (keys.has(key)) {
+				updated.push(`${key}=${config[key]}`);
+				keys.delete(key);
+			} else {
+				updated.push(line);
+			}
+		} else {
+			updated.push(line); // 保留注释或空行
+		}
+	}
+	
+	// 添加新增的键值
+	for (const key of keys) {
+		updated.push(`${key}=${config[key]}`);
+	}
+	
+	await fsp.writeFile(envfile, updated.join('\n'), 'utf-8');
 }
 
 
@@ -519,29 +567,37 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
   if(serverJson.build<bundleJson.build){//Upgrade package files
     //Backup agents:
     // this.setStartupState("Backup your agents...");
-    await removeDirOrFile(path.join(targetDir,"agents"));
-    rename(path.join(srcDir,"agents"),path.join(targetDir,"agents"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(srcDir,"agents"))) {
+      await removeDirOrFile(path.join(targetDir,"agents"));
+      rename(path.join(srcDir,"agents"),path.join(targetDir,"agents"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log('Directory moved successfully');
+      });
+    }
+    
     //await fsp.mkdir(path.join(targetDir,"agents"), { recursive: true });
     //await copyDirWithReplace(path.join(srcDir,"agents"),path.join(targetDir,"agents"));
     
     //Backup file-hub:
     // this.setStartupState("Backup your files...");
-    await removeDirOrFile(path.join(targetDir,"filehub"));
-    rename(path.join(srcDir,"filehub"),path.join(targetDir,"filehub"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(srcDir,"filehub"))) {
+      await removeDirOrFile(path.join(targetDir,"filehub"));
+      rename(path.join(srcDir,"filehub"),path.join(targetDir,"filehub"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log('Directory moved successfully');
+      });
+    }
+    
     
     //Backup rpa-data:
     // this.setStartupState("Backup your rpa data...");
-    await removeDirOrFile(path.join(targetDir,"rpa_data_dir"));
-    rename(path.join(srcDir,"rpa_data_dir"),path.join(targetDir,"rpa_data_dir"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(srcDir,"rpa_data_dir"))) {
+      await removeDirOrFile(path.join(targetDir,"rpa_data_dir"));
+      rename(path.join(srcDir,"rpa_data_dir"),path.join(targetDir,"rpa_data_dir"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log('Directory moved successfully');
+      });
+    }
     
     //Remove server dir
     // this.setStartupState("Upgrading local server...");
@@ -552,7 +608,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
 
     // const bundleBuffer = getAsset('bundle/bundle.zip')
     // await unzip(Buffer.from(bundleBuffer),srcDir)
-    extractBundle();
+    extractBundle(targetDir, srcDir);
     
     //Copy agents folder:
     // this.setStartupState("Restore your agents...");
@@ -617,7 +673,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
   }
 }
 
-async function launchFirefox(url) {
+async function launchFirefox(url, targetDir, srcDir) {
   const userDir = getUserDir();
   let firefoxDir = path.join(userDir.appData,'aifrontier','server', 'src');
   let firefoxExe = '';
@@ -627,14 +683,18 @@ async function launchFirefox(url) {
     firefoxDir = path.join(__dirname, '../bundle_data');
   }
 
+  let webDriveApp;
   if(process.platform === 'win32') {
     firefoxExe = path.join(firefoxDir,'acefox','firefox.exe');
+    webDriveApp = firefoxExe;
   } else if(process.platform === 'linux') {
     firefoxExe = path.join(firefoxDir,'Acefox-aarch64.AppImage');
     args = ['--new-window', url];
+    webDriveApp = firefoxExe;
   } else if(process.platform === 'darwin') {
     firefoxExe = path.join(firefoxDir,'Acefox.app','Contents','MacOS','firefox');
     args = ['--new-window', url];
+    webDriveApp = path.join(firefoxDir,'Acefox.app')
   }
 
   if(existsSync(firefoxExe)) {
@@ -644,10 +704,49 @@ async function launchFirefox(url) {
     } catch (error) {
       console.log('权限设置失败:', error.message);
     }
+
+    if(await PortChecker.isPortInUse(FIREFOX_DEBUG_PORT)) {
+      FIREFOX_DEBUG_PORT = await PortChecker.findAvailablePort(FIREFOX_DEBUG_PORT+1,FIREFOX_DEBUG_PORT+100)
+
+      if(!FIREFOX_DEBUG_PORT) {
+        sendSSELog(res,`无可用RPA端口`)
+        console.log(`无可用RPA端口`)
+      }
+    }
+
+    args = args.concat(['-no-remote', `--remote-debugging-port=${FIREFOX_DEBUG_PORT}`])
     // 使用 spawn 而不是 execFile，更好地处理进程
     const firefoxProcess = spawn(firefoxExe, args, {
       detached: false,
-      stdio: 'ignore'
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const newEnvs = {
+      WEBDRIVE_APP: webDriveApp
+    }
+    updateEnvFile(path.join(srcDir,'.env'), newEnvs)
+
+    let buffer = '';
+
+    firefoxProcess.stderr.on('data', data => {
+      console.error('[firefoxProcess:stderr]', data.toString());
+
+      buffer += data.toString();
+      // 检测启动成功标志
+      if (buffer.includes('WebDriver BiDi listening on')) {
+        // let callback;
+        console.log('✅ Firefox WebDriver BiDi 已启动');
+        // waitApp=false;
+        // this.connect().then(()=>{
+        //   waitApp = false;
+        //   callback = this.startCallback;
+        //   if (callback) {
+        //     this.startCallback = null;
+        //     this.startCallerror = null;
+        //   }
+        //   callback(this.port);
+        // });
+      }
     });
 
     // firefoxProcess.unref();
@@ -720,11 +819,13 @@ async function ai2appsStart(cb, res) {
 
   if(inAppBundleJson) {
     const nodeVersion=bundleJson.node;
-		let nodePath= path.join(dependenciesDir, 'node');
+    const nodeEnvs = nodeInstaller.getEnvironment();
+		let nodePath= nodeEnvs.nodePath; //path.join(dependenciesDir, 'node-v22.21.1-darwin-arm64', 'bin');
 		console.log(`Installing node version: ${nodeVersion}`);
 		// if(!nodePath) {
 		// 	nodePath = await installNode(targetDir, nodeVersion, !!nodePath);
 		// }
+    console.log(`nodePath:${path.dirname(nodePath)}`)
 		if(nodePath) {
 			process.env.PATH = `${path.dirname(nodePath)}:${process.env.PATH}`;
 		}
@@ -733,26 +834,48 @@ async function ai2appsStart(cb, res) {
     await installNodePackages(targetDir,nodeVersion, res);
 
     sendSSEProgress(res, '启动AA服务...')
-    const child = spawn("node", [path.join(targetDir,'src',"start.js")],{cwd:targetDir,env:process.env});
-    child.stdout.on('data', async (data) => {
-      const text = data.toString();
-      console.log('[server]', text);
-      if (text.includes('READY:')) {
-        console.log("Local server ready, starting AI2Apps dashboard...");
+    process.env.BROWSER_DEBUG_PORT = FIREFOX_DEBUG_PORT;
 
-        cb && cb()
+    if(await PortChecker.isPortInUse(AA_SERVICE_PORT)) {
+      AA_SERVICE_PORT = await PortChecker.findAvailablePort(AA_SERVICE_PORT+1,AA_SERVICE_PORT+100)
+
+      if(!AA_SERVICE_PORT) {
+        sendSSELog(res,`无可用AA服务端口`)
+        console.log(`无可用AA服务端口`)
       }
-    });
-    
-    child.stderr.on('data', (data) => {
-      console.error('[server error]', data.toString());
-    });
-    
-    child.on('exit', (code) => {
-      console.log('aa exited with code', code);
-    });
+    }
+    process.env.PORT = AA_SERVICE_PORT;
 
-    aaProcess = child;
+
+    try {
+      const child = spawn(`${nodePath}`, [path.join(targetDir,'src',"start.js")],{cwd:path.join(targetDir,'src'),env:process.env});
+      // sendSSEProgress(res, '启动AA服务 spawn...')
+      child.stdout.on('data', async (data) => {
+        const text = data.toString();
+        console.log('[server]', text);
+        sendSSELog(res, text)
+        if (text.includes('READY:')) {
+          console.log("Local server ready, starting AI2Apps dashboard...");
+
+          cb && cb()
+        }
+      });
+      
+      child.stderr.on('data', (data) => {
+        sendSSELog(res, data.toString())
+        console.error('[server error]', data.toString());
+      });
+      
+      child.on('exit', (code) => {
+        sendSSELog(res, `aa exited with code ${code}`)
+        console.log('aa exited with code', code);
+      });
+
+      aaProcess = child;
+    } catch(err) {
+      sendSSELog(res, `spawn aa fail:${err.message}`)
+      console.error(`spawn aa fail:${err.message}`)
+    }
   }
 }
 
@@ -778,7 +901,7 @@ async function checkAndInstallSysDependencies(res) {
 
   try {
     sendSSEProgress(res, '检查并安装node...')
-    const nodeInstaller = new NodeInstaller();
+    // const nodeInstaller = new NodeInstaller();
     nodeInstaller.version = nodeVersion;
     nodeInstaller.installDir = dependenciesDir;
     nodeInstaller.logger = logger;
@@ -844,29 +967,42 @@ app.get('/api/bootstrap', async (req, res) => {
 
     res.write(`data: ${JSON.stringify({ 
       type: 'redirect', 
-      message: 'http://localhost:3015',
+      message: `http://localhost:${AA_SERVICE_PORT}`,
       timestamp: Date.now() 
     })}\n\n`);
     // res.end();
   }, res);
-  console.log(`ai2appsStart complete`)
+  console.log(`ai2appsStart complete, url:http://localhost:${AA_SERVICE_PORT}`)
 })
 
-// Start the server
-app.listen(3000, async () => {
-  console.log('Server running on http://localhost:3000')
 
-  const userDir = getUserDir();
-  const targetDir = path.join(userDir.appData,'aifrontier','server');
-  const srcDir = path.join(targetDir, 'src')
+async function startServer() {
+  // Start the server
+  if(await PortChecker.isPortInUse(STARTER_SERVICE_PORT)) {
+    STARTER_SERVICE_PORT = await PortChecker.findAvailablePort(STARTER_SERVICE_PORT+1,STARTER_SERVICE_PORT+100)
 
-  if(existsSync(srcDir)) {
-    await checkAndUpgradeBundle(targetDir, srcDir)
-  } else {
-    await extractBundle(targetDir, srcDir);
+    if(!STARTER_SERVICE_PORT) {
+      console.log('启动页无可用端口')
+      throw new Error('启动页无可用端口')
+    }
   }
-  
-  
-  const url = 'http://localhost:3000';
-  await launchFirefox(url);
-})
+  app.listen(STARTER_SERVICE_PORT, async () => {
+    console.log(`Server running on http://localhost:${STARTER_SERVICE_PORT}`)
+
+    const userDir = getUserDir();
+    const targetDir = path.join(userDir.appData,'aifrontier','server');
+    const srcDir = path.join(targetDir, 'src')
+
+    if(existsSync(srcDir)) {
+      await checkAndUpgradeBundle(targetDir, srcDir)
+    } else {
+      await extractBundle(targetDir, srcDir);
+    }
+    
+    
+    const url = `http://localhost:${STARTER_SERVICE_PORT}`;
+    await launchFirefox(url, targetDir, srcDir);
+  })
+}
+
+startServer()

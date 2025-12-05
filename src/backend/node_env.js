@@ -162,12 +162,18 @@ class NodeInstaller {
 
   // 设置环境变量
   setupEnvironment() {
+    const envs = this.getEnvironment();
+    
+    // 创建启动脚本
+    this.createStartScript(envs.binDir, envs.nodeDir);
+    
+    return envs;
+  }
+
+  getEnvironment() {
     const downloadInfo = this.getDownloadInfo();
     const nodeDir = path.join(this.installDir, downloadInfo.extractDir);
     const binDir = path.join(nodeDir, downloadInfo.binaryDir);
-    
-    // 创建启动脚本
-    this.createStartScript(binDir, nodeDir);
     
     return {
       nodePath: path.join(binDir, downloadInfo.executable),
