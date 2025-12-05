@@ -244,5 +244,5 @@ module.exports = {
     copyDirWithReplace,
     linkDir,
     removeDirOrFile,
-    execAsync
+    execSyncAsync
 };

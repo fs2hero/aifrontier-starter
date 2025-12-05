@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const http = require('http');
+const { execSyncAsync } = require('./sys_utils')
 
 class CoreutilsInstaller {
   constructor(options = {}) {
@@ -19,7 +20,7 @@ class CoreutilsInstaller {
   }
 
   // 检查是否已安装 coreutils
-  isCoreutilsInstalled() {
+  async isCoreutilsInstalledAsync() {
     try {
       if (this.platform === 'win32') {
         // Windows: 检查常见的位置
@@ -29,18 +30,18 @@ class CoreutilsInstaller {
           'find --version'
         ];
         
-        return testCommands.some(cmd => {
+        for(const cmd of testCommands) {
           try {
-            execSync(cmd, { stdio: 'ignore' });
+            await execSyncAsync(cmd, { stdio: 'ignore' });
             return true;
           } catch {
             return false;
           }
-        });
+        }
       } else {
         // Unix-like 系统通常已安装
         const cmd = this.platform === 'darwin' ? 'command -v greadlink && greadlink --version' : 'command -v readlink && readlink --version';
-        execSync(cmd, { stdio: 'ignore' });
+        await execSyncAsync(cmd, { stdio: 'ignore' });
         return true;
       }
     } catch {
@@ -49,11 +50,11 @@ class CoreutilsInstaller {
   }
 
   // 检测已安装的 coreutils 环境
-  detectCoreutilsEnvironment() {
+  async detectCoreutilsEnvironmentAsync() {
     try {
       // 检查 Git Bash
       try {
-        execSync('git --version', { stdio: 'ignore' });
+        await execSyncAsync('git --version', { stdio: 'ignore' });
         const gitBashPath = 'C:\\Program Files\\Git\\bin\\ls.exe';
         if (fs.existsSync(gitBashPath)) {
           return 'git-bash';
@@ -62,7 +63,7 @@ class CoreutilsInstaller {
 
       // 检查 WSL
       try {
-        execSync('wsl ls --version', { stdio: 'ignore' });
+        await execSyncAsync('wsl ls --version', { stdio: 'ignore' });
         return 'wsl';
       } catch {}
 
@@ -86,7 +87,7 @@ class CoreutilsInstaller {
 
       // 检查 Chocolatey coreutils
       try {
-        execSync('choco list --local-only | findstr coreutils', { stdio: 'ignore' });
+        await execSyncAsync('choco list --local-only | findstr coreutils', { stdio: 'ignore' });
         return 'chocolatey';
       } catch {}
 
@@ -97,12 +98,12 @@ class CoreutilsInstaller {
   }
 
   // 获取安装方法推荐
-  getRecommendedInstallMethod() {
+  async getRecommendedInstallMethodAsync() {
     if (this.platform !== 'win32') {
       return 'native'; // Unix-like 系统通常已安装
     }
 
-    const existingEnv = this.detectCoreutilsEnvironment();
+    const existingEnv = await this.detectCoreutilsEnvironmentAsync();
     if (existingEnv) {
       return existingEnv;
     }
@@ -110,13 +111,13 @@ class CoreutilsInstaller {
     // 根据系统环境推荐
     try {
       // 检查是否已安装 Chocolatey
-      execSync('choco --version', { stdio: 'ignore' });
+      await execSyncAsync('choco --version', { stdio: 'ignore' });
       return 'chocolatey';
     } catch {}
 
     try {
       // 检查是否已安装 Git
-      execSync('git --version', { stdio: 'ignore' });
+      await execSyncAsync('git --version', { stdio: 'ignore' });
       return 'git-bash';
     } catch {}
 
@@ -182,12 +183,12 @@ class CoreutilsInstaller {
     try {
       // 检查 Chocolatey 是否已安装
       try {
-        execSync('choco --version', { stdio: 'ignore' });
+        await execSyncAsync('choco --version', { stdio: 'ignore' });
       } catch {
         throw new Error('Chocolatey is not installed. Please install Chocolatey first.');
       }
 
-      execSync('choco install coreutils -y', {
+      await execSyncAsync('choco install coreutils -y', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
@@ -206,20 +207,20 @@ class CoreutilsInstaller {
     try {
       // 检查是否已启用 WSL
       try {
-        execSync('wsl --list', { stdio: 'ignore' });
+        await execSyncAsync('wsl --list', { stdio: 'ignore' });
         this.logger('✅ WSL is already installed');
         return true;
       } catch {}
 
       // 启用 WSL 功能
       this.logger('🔧 Enabling WSL feature...');
-      execSync('dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart', {
+      await execSyncAsync('dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
       // 安装默认的 Linux 发行版 (Ubuntu)
       this.logger('📥 Installing Ubuntu...');
-      execSync('wsl --install -d Ubuntu', {
+      await execSyncAsync('wsl --install -d Ubuntu', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
@@ -240,9 +241,9 @@ class CoreutilsInstaller {
       if (this.platform === 'darwin') {
         // macOS: 使用 Homebrew 安装最新版本
         try {
-          execSync('brew --version', { stdio: 'ignore' });
+          await execSyncAsync('brew --version', { stdio: 'ignore' });
           this.logger('📦 Updating coreutils via Homebrew...');
-          execSync('brew install coreutils', {
+          await execSyncAsync('brew install coreutils', {
             stdio: this.silent ? 'ignore' : 'inherit'
           });
         } catch {
@@ -252,17 +253,17 @@ class CoreutilsInstaller {
         // Linux: 使用包管理器
         if (fs.existsSync('/etc/debian_version')) {
           // Debian/Ubuntu
-          execSync('sudo apt update && sudo apt install -y coreutils', {
+          await execSyncAsync('sudo apt update && sudo apt install -y coreutils', {
             stdio: this.silent ? 'ignore' : 'inherit'
           });
         } else if (fs.existsSync('/etc/redhat-release')) {
           // RedHat/CentOS
-          execSync('sudo yum install -y coreutils', {
+          await execSyncAsync('sudo yum install -y coreutils', {
             stdio: this.silent ? 'ignore' : 'inherit'
           });
         } else if (fs.existsSync('/etc/alpine-release')) {
           // Alpine
-          execSync('sudo apk add coreutils', {
+          await execSyncAsync('sudo apk add coreutils', {
             stdio: this.silent ? 'ignore' : 'inherit'
           });
         }
@@ -354,7 +355,7 @@ class CoreutilsInstaller {
       
       for (const test of testCommands) {
         try {
-          execSync(test.cmd, { stdio: 'ignore' });
+          await execSyncAsync(test.cmd, { stdio: 'ignore' });
           availableTools.push(test.name);
         } catch {
           // 工具不可用
@@ -409,8 +410,8 @@ class CoreutilsInstaller {
     this.logger(`🚀 Setting up coreutils for ${this.platform}-${this.arch}...`);
 
     // 检查是否已安装
-    if (this.isCoreutilsInstalled()) {
-      const env = this.detectCoreutilsEnvironment();
+    if (await this.isCoreutilsInstalledAsync()) {
+      const env = await this.detectCoreutilsEnvironmentAsync();
       this.logger(`ℹ️  Coreutils are already available via ${env || 'system'}`);
       this.showUsageInfo(env);
       return;
