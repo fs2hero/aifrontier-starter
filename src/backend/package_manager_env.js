@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const { spawn, execSync } = require('child_process');
 const os = require('os');
-const https = require('https');
-const http = require('http');
 const ChocolateyInstaller = require('./choco_installer');
 const HomebrewInstaller = require('./homebrew_installer');
 class PackageManagerInstaller {

@@ -3,8 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { execSync } = require('child_process');
 const os = require('os');
+const { execSyncAsync } = require('./sys_utils');
 
 class NodeInstaller {
   constructor() {
@@ -137,7 +137,7 @@ class NodeInstaller {
 
   // 使用系统命令解压
   async extractWithSystemCommand(filePath, extractTo) {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       let command;
       
       if (filePath.endsWith('.tar.gz') || filePath.endsWith('.tgz')) {
@@ -152,7 +152,7 @@ class NodeInstaller {
       }
 
       try {
-        execSync(command, { stdio: 'inherit' });
+        await execSyncAsync(command, { stdio: 'inherit' });
         resolve();
       } catch (error) {
         reject(error);
@@ -214,11 +214,11 @@ exec "$SHELL"
   }
 
   // 验证安装
-  verifyInstallation(nodePath, npmPath) {
+  async verifyInstallationAsync(nodePath, npmPath) {
     try {
-      const version = execSync(`"${nodePath}" --version`, { encoding: 'utf8' }).trim();
-      const npmVersion = execSync(`"${npmPath}" --version`, { encoding: 'utf8' }).trim();
-      
+      const version = await execSyncAsync(`"${nodePath}" --version`, { encoding: 'utf8' });
+      const npmVersion = await execSyncAsync(`"${npmPath}" --version`, { encoding: 'utf8' });
+
       this.logger(`✅ Node.js ${version} installed successfully!`);
       this.logger(`✅ npm ${npmVersion} installed successfully!`);
       return true;
@@ -261,7 +261,7 @@ exec "$SHELL"
       const paths = this.setupEnvironment();
       
       // 验证
-      const success = this.verifyInstallation(paths.nodePath,  paths.npmPath);
+      const success = await this.verifyInstallationAsync(paths.nodePath,  paths.npmPath);
       
       if (success) {
         this.logger('\n🎉 Installation completed!');

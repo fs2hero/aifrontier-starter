@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const http = require('http');
+const { execSyncAsync } = require('./sys_utils');
 
 class MinicondaInstaller {
   constructor(options = {}) {
@@ -300,13 +301,13 @@ class MinicondaInstaller {
       if (this.platform === 'win32') {
         this.logger('Initializing for Windows...');
         // Windows 初始化
-        execSync(`"${condaPath}" init cmd.exe`, { stdio: 'inherit' });
-        execSync(`"${condaPath}" init powershell`, { stdio: 'inherit' });
+        await execSyncAsync(`"${condaPath}" init cmd.exe`, { stdio: 'inherit' });
+        await execSyncAsync(`"${condaPath}" init powershell`, { stdio: 'inherit' });
       } else {
         const shell = process.env.SHELL || '';
         const initCmd = shell.includes('zsh') ? 'zsh' : 'bash';
         this.logger(`Initializing for ${initCmd}...`);
-        execSync(`"${condaPath}" init ${initCmd}`, { stdio: 'inherit' });
+        await execSyncAsync(`"${condaPath}" init ${initCmd}`, { stdio: 'inherit' });
       }
 
       this.logger('✅ Shell initialization completed!');
@@ -316,7 +317,7 @@ class MinicondaInstaller {
     }
   }
 
-  isCondaInstalled() {
+  async isCondaInstalledAsync() {
     const actualInstallDir = this.installDir.replace(/"/g, '');
     const condaExecutable = this.platform === 'win32' 
       ? path.join(actualInstallDir, 'Scripts', 'conda.exe')
@@ -324,7 +325,7 @@ class MinicondaInstaller {
 
     if(fs.existsSync(condaExecutable)) {
       this.logger(`conda already installed at: ${condaExecutable}`);
-      const version = execSync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
+      const version = await execSyncAsync(`"${condaExecutable}" --version`, { encoding: 'utf8' });
       
       this.logger(`✅ Miniconda installed version: ${version}`);
 
@@ -362,7 +363,7 @@ class MinicondaInstaller {
       }
 
       // 测试 conda 命令
-      const version = execSync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
+      const version = await execSyncAsync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
       
       this.logger(`✅ Miniconda installed successfully: ${version}`);
       this.logger(`📍 Installation directory: ${actualInstallDir}`);
@@ -386,7 +387,7 @@ class MinicondaInstaller {
 
     try {
       //检查是否安装
-      if(this.isCondaInstalled()) {
+      if(await this.isCondaInstalledAsync()) {
         return;
       }
 

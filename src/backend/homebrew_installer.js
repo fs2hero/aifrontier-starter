@@ -1,8 +1,9 @@
 // install_brew.js
-const { execSync, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execSyncAsync } = require('./sys_utils')
 
 class HomebrewInstaller {
   constructor(options = {}) {
@@ -42,10 +43,10 @@ class HomebrewInstaller {
   }
 
   // 检查必要的依赖
-  checkDependencies() {
+  async checkDependenciesAsync() {
     this.logger('🔍 检查系统依赖...');
     try {
-      execSync('git --version', { stdio: 'pipe' });
+      await execSyncAsync('git --version', { stdio: 'pipe' });
       this.logger('✅ Git 已安装');
       return true;
     } catch (error) {
@@ -56,7 +57,7 @@ class HomebrewInstaller {
   }
 
   // 创建安装目录
-  createDirectory() {
+  async createDirectoryAsync() {
     this.logger(`📂 创建目录: ${this.brewPrefix}`);
     try {
       if (!fs.existsSync(this.brewPrefix)) {
@@ -65,15 +66,15 @@ class HomebrewInstaller {
       } else {
         this.logger('📁 目录已存在');
       }
-      return true;
+      return Promise.resolve(true);
     } catch (error) {
       console.error(`❌ 创建目录失败: ${error.message}`);
-      return false;
+      return Promise.resolve(false);
     }
   }
 
   // 克隆主仓库
-  cloneBrewRepo() {
+  async cloneBrewRepoAsync() {
     this.logger('📦 克隆 Homebrew 主仓库...');
     const brewRepo = 'https://github.com/Homebrew/brew.git';
     
@@ -84,7 +85,7 @@ class HomebrewInstaller {
       }
 
       this.logger(`正在克隆: ${brewRepo}`);
-      execSync(`git clone --depth=1 ${brewRepo} "${this.brewPrefix}"`, {
+      await execSyncAsync(`git clone --depth=1 ${brewRepo} "${this.brewPrefix}"`, {
         stdio: 'inherit',
         cwd: path.dirname(this.brewPrefix)
       });
@@ -100,7 +101,7 @@ class HomebrewInstaller {
   }
 
   // 克隆核心库 (homebrew-core)
-  cloneCoreRepo() {
+  async cloneCoreRepoAsync() {
     this.logger('📦 克隆 Homebrew 核心库...');
     const coreDir = path.join(this.brewPrefix, 'Library', 'Taps', 'homebrew', 'homebrew-core');
     const coreRepo = 'https://github.com/Homebrew/homebrew-core.git';
@@ -115,7 +116,7 @@ class HomebrewInstaller {
       fs.mkdirSync(path.dirname(coreDir), { recursive: true });
       
       this.logger(`正在克隆: ${coreRepo}`);
-      execSync(`git clone --depth=1 ${coreRepo} "${coreDir}"`, {
+      await execSyncAsync(`git clone --depth=1 ${coreRepo} "${coreDir}"`, {
         stdio: 'inherit'
       });
       this.logger('✅ Homebrew 核心库克隆完成');
@@ -127,13 +128,13 @@ class HomebrewInstaller {
   }
 
   // 配置环境变量 (Node.js进程内)
-  setupEnvironment() {
+  async setupEnvironmentAsync() {
     this.logger('⚙️  配置环境变量...');
     
     // 获取brew shellenv的输出
     const brewBin = path.join(this.brewPrefix, 'bin', 'brew');
     try {
-      const shellenv = execSync(`"${brewBin}" shellenv`, { encoding: 'utf8' });
+      const shellenv = await execSyncAsync(`"${brewBin}" shellenv`, { encoding: 'utf8' });
       
       // 解析并应用环境变量
       const lines = shellenv.split('\n');
@@ -161,7 +162,7 @@ class HomebrewInstaller {
   }
 
   // 添加到用户的shell配置文件
-  addToShellConfig() {
+  async addToShellConfigAsync() {
     this.logger(`📝 更新Shell配置文件: ${this.shellConfig}`);
     
     const brewBin = path.join(this.brewPrefix, 'bin', 'brew');
@@ -174,7 +175,7 @@ class HomebrewInstaller {
         content = fs.readFileSync(this.shellConfig, 'utf8');
         if (content.includes(brewBin)) {
           this.logger('✅ Homebrew 已在配置文件中');
-          return true;
+          return Promise.resolve(true);
         }
       }
       
@@ -182,17 +183,17 @@ class HomebrewInstaller {
       fs.appendFileSync(this.shellConfig, configLine);
       this.logger('✅ 已添加到Shell配置文件');
       this.logger(`   重启终端或运行: source ${this.shellConfig}`);
-      return true;
+      return Promise.resolve(true);
     } catch (error) {
       console.error(`❌ 更新配置文件失败: ${error.message}`);
       this.logger(`💡 请手动将以下行添加到 ${this.shellConfig}:`);
       this.logger(`   eval "$(${brewBin} shellenv)"`);
-      return false;
+      return Promise.resolve(false);
     }
   }
 
   // 验证安装
-  verifyInstallation() {
+  async verifyInstallationAsync() {
     this.logger('🔬 验证安装...');
     
     try {
@@ -203,7 +204,7 @@ class HomebrewInstaller {
       }
       
       // 运行brew --version
-      const version = execSync(`"${brewBin}" --version`, { encoding: 'utf8' }).trim();
+      const version = await execSyncAsync(`"${brewBin}" --version`, { encoding: 'utf8' });
       this.logger(`✅ ${version}`);
       
       // 运行brew doctor进行基本检查
@@ -240,20 +241,21 @@ class HomebrewInstaller {
     
     // 步骤检查
     const steps = [
-      { name: '检查依赖', method: () => this.checkDependencies() },
-      { name: '创建目录', method: () => this.createDirectory() },
-      { name: '克隆主仓库', method: () => this.cloneBrewRepo() },
-      { name: '克隆核心库', method: () => this.cloneCoreRepo() },
-      { name: '配置环境', method: () => this.setupEnvironment() },
-      { name: '验证安装', method: () => this.verifyInstallation() },
-      { name: '更新配置', method: () => this.addToShellConfig() },
+      { name: '检查依赖', method: () => this.checkDependenciesAsync() },
+      { name: '创建目录', method: () => this.createDirectoryAsync() },
+      { name: '克隆主仓库', method: () => this.cloneBrewRepoAsync() },
+      { name: '克隆核心库', method: () => this.cloneCoreRepoAsync() },
+      { name: '配置环境', method: () => this.setupEnvironmentAsync() },
+      { name: '验证安装', method: () => this.verifyInstallationAsync() },
+      { name: '更新配置', method: () => this.addToShellConfigAsync() },
     ];
     
     for (const [index, step] of steps.entries()) {
       this.logger(`\n📋 步骤 ${index + 1}/${steps.length}: ${step.name}`);
       this.logger('-'.repeat(40));
       
-      if (!step.method()) {
+      const bSuccess = await step.method();
+      if (!bSuccess) {
         console.error(`❌ 安装失败于: ${step.name}`);
         return false;
       }
@@ -283,7 +285,7 @@ async function main() {
       this.logger('\n🔧 尝试获取可用命令列表...');
       try {
         const brewBin = path.join(installer.brewPrefix, 'bin', 'brew');
-        const help = execSync(`"${brewBin}" help`, { encoding: 'utf8' });
+        const help = await execSyncAsync(`"${brewBin}" help`, { encoding: 'utf8' });
         this.logger(help.split('\n').slice(0, 10).join('\n'));
         this.logger('...');
       } catch (e) {

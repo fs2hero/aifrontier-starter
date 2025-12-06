@@ -2,10 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
 const os = require('os');
 const https = require('https');
 const http = require('http');
+const { execSyncAsync } = require('./sys_utils')
 
 class CurlInstaller {
   constructor(options = {}) {
@@ -19,7 +19,7 @@ class CurlInstaller {
   }
 
   // 检查系统是否已安装 curl
-  isCurlInstalled() {
+  async isCurlInstalledAsync() {
     try {
       if (this.platform === 'win32') {
         // Windows 下检查多个可能的位置
@@ -29,17 +29,21 @@ class CurlInstaller {
           path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'curl', 'bin', 'curl.exe')
         ];
         
-        return possiblePaths.some(cmd => {
+        let bRet = false;
+        for( const cmd of possiblePaths) {
           try {
-            execSync(`where ${cmd}`, { stdio: 'ignore' });
-            return true;
+            await execSyncAsync(`where ${cmd}`, { stdio: 'ignore' });
+            bRet = true;
+            break;
           } catch {
-            return false;
+
           }
-        });
+        }
+        return bRet;
+
       } else {
         // Unix-like 系统
-        execSync('which curl', { stdio: 'ignore' });
+        await execSyncAsync('which curl', { stdio: 'ignore' });
         return true;
       }
     } catch {
@@ -48,10 +52,10 @@ class CurlInstaller {
   }
 
   // 获取 curl 版本
-  getCurlVersion() {
+  async getCurlVersionAsync() {
     try {
-      const version = execSync('curl --version', { encoding: 'utf8' }).split('\n')[0];
-      return version;
+      const version = await execSyncAsync('curl --version', { encoding: 'utf8' });
+      return version.split('\n')[0];
     } catch {
       return null;
     }
@@ -68,19 +72,19 @@ class CurlInstaller {
           if (fs.existsSync('/etc/debian_version')) {
             // Debian/Ubuntu
             this.logger('🐧 Debian/Ubuntu detected, using apt...');
-            execSync('sudo apt update && sudo apt install -y curl', { 
+            await execSyncAsync('sudo apt update && sudo apt install -y curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
           } else if (fs.existsSync('/etc/redhat-release') || fs.existsSync('/etc/centos-release')) {
             // RedHat/CentOS
             this.logger('🎩 RedHat/CentOS detected, using yum...');
-            execSync('sudo yum install -y curl', { 
+            await execSyncAsync('sudo yum install -y curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
           } else if (fs.existsSync('/etc/alpine-release')) {
             // Alpine Linux
             this.logger('🏔️ Alpine Linux detected, using apk...');
-            execSync('sudo apk add curl', { 
+            await execSyncAsync('sudo apk add curl', { 
               stdio: this.silent ? 'ignore' : 'inherit' 
             });
           } else {
@@ -93,13 +97,13 @@ class CurlInstaller {
           this.logger('🍎 macOS detected, using Homebrew...');
           try {
             // 检查是否已安装 Homebrew
-            execSync('which brew', { stdio: 'ignore' });
+            await execSyncAsync('which brew', { stdio: 'ignore' });
           } catch {
             this.logger('🔧 Installing Homebrew first...');
             const brewInstallScript = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"';
-            execSync(brewInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
+            await execSyncAsync(brewInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
           }
-          execSync('brew install curl', { 
+          await execSyncAsync('brew install curl', { 
             stdio: this.silent ? 'ignore' : 'inherit' 
           });
           break;
@@ -129,7 +133,7 @@ class CurlInstaller {
       // 尝试使用 Winget (Windows 11/10 1809+)
       try {
         this.logger(' Trying winget...');
-        execSync('winget install --id curl.curl -e', { 
+        await execSyncAsync('winget install --id curl.curl -e', { 
           stdio: this.silent ? 'ignore' : 'inherit' 
         });
         return true;
@@ -140,14 +144,14 @@ class CurlInstaller {
       // 尝试使用 Chocolatey
       try {
         // 检查是否已安装 Chocolatey
-        execSync('choco --version', { stdio: 'ignore' });
+        await execSyncAsync('choco --version', { stdio: 'ignore' });
       } catch {
         this.logger('🔧 Installing Chocolatey first...');
         const chocoInstallScript = 'powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString(\'https://community.chocolatey.org/install.ps1\'))"';
-        execSync(chocoInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
+        await execSyncAsync(chocoInstallScript, { stdio: this.silent ? 'ignore' : 'inherit' });
       }
 
-      execSync('choco install curl -y', { 
+      await execSyncAsync('choco install curl -y', { 
         stdio: this.silent ? 'ignore' : 'inherit' 
       });
       return true;
@@ -325,10 +329,10 @@ class CurlInstaller {
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [System.IO.Compression.ZipFile]::ExtractToDirectory("${zipPath}", "${extractDir}")
         `;
-        execSync(`powershell -Command "${psScript}"`, { stdio: 'inherit' });
+        await execSyncAsync(`powershell -Command "${psScript}"`, { stdio: 'inherit' });
       } else {
         // Unix-like 使用 unzip
-        execSync(`unzip -q "${zipPath}" -d "${extractDir}"`, { stdio: 'inherit' });
+        await execSyncAsync(`unzip -q "${zipPath}" -d "${extractDir}"`, { stdio: 'inherit' });
       }
     } catch (error) {
       throw new Error(`Extraction failed: ${error.message}`);
@@ -362,7 +366,7 @@ class CurlInstaller {
       this.logger(`🔧 Adding to Windows PATH: ${binDir}`);
       
       // 获取当前用户 PATH
-      const currentPath = execSync('reg query "HKCU\\Environment" /v PATH', { encoding: 'utf8' });
+      const currentPath = await execSyncAsync('reg query "HKCU\\Environment" /v PATH', { encoding: 'utf8' });
       let userPath = '';
       
       if (currentPath.includes('PATH')) {
@@ -375,7 +379,7 @@ class CurlInstaller {
       // 检查是否已包含该路径
       if (!userPath.includes(binDir)) {
         const newPath = userPath ? `${userPath};${binDir}` : binDir;
-        execSync(`setx PATH "${newPath}"`, { stdio: 'inherit' });
+        await execSyncAsync(`setx PATH "${newPath}"`, { stdio: 'inherit' });
         this.logger('✅ Added to Windows PATH');
       } else {
         this.logger('ℹ️  PATH already contains curl directory');
@@ -388,8 +392,8 @@ class CurlInstaller {
   // 验证安装
   async verifyInstallation() {
     try {
-      if (this.isCurlInstalled()) {
-        const version = this.getCurlVersion();
+      if (await this.isCurlInstalledAsync()) {
+        const version = await this.getCurlVersionAsync();
         this.logger(`✅ curl installed successfully: ${version}`);
         return true;
       } else {
@@ -404,8 +408,8 @@ class CurlInstaller {
   // 主安装方法
   async install() {
     // 检查是否已安装
-    if (this.isCurlInstalled()) {
-      const version = this.getCurlVersion();
+    if (await this.isCurlInstalledAsync()) {
+      const version = await this.getCurlVersionAsync();
       this.logger(`ℹ️  curl is already installed: ${version}`);
       return;
     }
