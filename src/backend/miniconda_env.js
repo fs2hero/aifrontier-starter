@@ -363,7 +363,8 @@ class MinicondaInstaller {
       }
 
       // 测试 conda 命令
-      const version = await execSyncAsync(`"${condaExecutable}" --version`, { encoding: 'utf8' }).trim();
+      let version = await execSyncAsync(`"${condaExecutable}" --version`, { encoding: 'utf8' })
+      version = version.trim();
       
       this.logger(`✅ Miniconda installed successfully: ${version}`);
       this.logger(`📍 Installation directory: ${actualInstallDir}`);

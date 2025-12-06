@@ -282,12 +282,12 @@ async function main() {
     const success = await installer.install();
     if (success) {
       // 安装成功后，可以在这里使用brew命令
-      this.logger('\n🔧 尝试获取可用命令列表...');
+      console.log('\n🔧 尝试获取可用命令列表...');
       try {
         const brewBin = path.join(installer.brewPrefix, 'bin', 'brew');
         const help = await execSyncAsync(`"${brewBin}" help`, { encoding: 'utf8' });
-        this.logger(help.split('\n').slice(0, 10).join('\n'));
-        this.logger('...');
+        console.log(help.split('\n').slice(0, 10).join('\n'));
+        console.log('...');
       } catch (e) {
         // 忽略，可能环境还没完全生效
       }
