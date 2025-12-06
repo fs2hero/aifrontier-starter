@@ -30,14 +30,17 @@ class CoreutilsInstaller {
           'find --version'
         ];
         
+        let bRet = false;
         for(const cmd of testCommands) {
           try {
             await execSyncAsync(cmd, { stdio: 'ignore' });
-            return true;
+            bRet = true;
+            break;
           } catch {
-            return false;
+
           }
         }
+        return bRet;
       } else {
         // Unix-like 系统通常已安装
         const cmd = this.platform === 'darwin' ? 'command -v greadlink && greadlink --version' : 'command -v readlink && readlink --version';
