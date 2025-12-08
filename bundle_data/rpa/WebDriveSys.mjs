@@ -231,57 +231,66 @@ function hideAppByPid(pid) {
 			} else {
 				args = [`--remote-debugging-port=${port}`, `about:blank`];
 			}
-			// firefox = this.firefox = spawn(
-			// 	`${pathToFireFox}/Contents/MacOS/firefox`,
-			// 	args,
-			// 	{ stdio: ['ignore', 'pipe', 'pipe'] }
-			// );
-			// let buffer = '';
-			
-			// firefox.stdout.on('data', data => {
-			// 	console.log('[firefox]', data.toString());
-			// 	if (!waitApp)
-			// 		return;
-			// });
-			
-			// firefox.stderr.on('data', data => {
-			// 	console.error('[firefox:stderr]', data.toString());
-			// 	if (!waitApp) {
-			// 		return;
-			// 	}
-			// 	buffer += data.toString();
-			// 	// 检测启动成功标志
-			// 	if (buffer.includes('WebDriver BiDi listening on')) {
-			// 		let callback;
-			// 		console.log('✅ Firefox WebDriver BiDi 已启动');
-			// 		waitApp=false;
-			// 		this.connect().then(()=>{
-			// 			waitApp = false;
-			// 			callback = this.startCallback;
-			// 			if (callback) {
-			// 				this.startCallback = null;
-			// 				this.startCallerror = null;
-			// 			}
-			// 			callback(this.port);
-			// 		});
-			// 	}
-			// });
-			
-			// firefox.on('exit', async (code) => {
-			// 	console.log(`Firefox exited with code ${code}`);
-			// 	this.emit("browser.exit");
-			// 	await this.sendToHooked("WebDriveBrowserClosed", { alias: this.alias });
-			// });
 
-			let callback;
-			this.connect().then(()=>{
-				callback = this.startCallback;
-				if (callback) {
-					this.startCallback = null;
-					this.startCallerror = null;
-				}
-				callback(this.port);
-			});
+			console.log(`BROWSER_DEBUG_PORT:${process.env.BROWSER_DEBUG_PORT}, BROWSER_HEADLESS:${process.env.BROWSER_HEADLESS}`)
+			let spawnNew = !process.env.BROWSER_DEBUG_PORT || process.env.BROWSER_HEADLESS == 1
+			console.log(`spawn new firefox ${spawnNew}`)
+			if(spawnNew) {
+				console.log(`spawn new firefox`)
+				firefox = this.firefox = spawn(
+					`${pathToFireFox}/Contents/MacOS/firefox`,
+					args,
+					{ stdio: ['ignore', 'pipe', 'pipe'] }
+				);
+				let buffer = '';
+				
+				firefox.stdout.on('data', data => {
+					console.log('[firefox]', data.toString());
+					if (!waitApp)
+						return;
+				});
+				
+				firefox.stderr.on('data', data => {
+					console.error('[firefox:stderr]', data.toString());
+					if (!waitApp) {
+						return;
+					}
+					buffer += data.toString();
+					// 检测启动成功标志
+					if (buffer.includes('WebDriver BiDi listening on')) {
+						let callback;
+						console.log('✅ Firefox WebDriver BiDi 已启动');
+						waitApp=false;
+						this.connect().then(()=>{
+							waitApp = false;
+							callback = this.startCallback;
+							if (callback) {
+								this.startCallback = null;
+								this.startCallerror = null;
+							}
+							callback(this.port);
+						});
+					}
+				});
+				
+				firefox.on('exit', async (code) => {
+					console.log(`Firefox exited with code ${code}`);
+					this.emit("browser.exit");
+					await this.sendToHooked("WebDriveBrowserClosed", { alias: this.alias });
+				});
+			} else {
+				console.log(`connect to exist firefox`)
+				let callback;
+				this.connect().then(()=>{
+					callback = this.startCallback;
+					if (callback) {
+						this.startCallback = null;
+						this.startCallerror = null;
+					}
+					callback(this.port);
+				});
+			}
+
 
 			//Alias for AAEE-Driver
 			this.alias = alias;

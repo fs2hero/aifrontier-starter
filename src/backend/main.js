@@ -11,7 +11,8 @@ const MinicondaInstaller = require('./miniconda_env.js');
 const PackageManagerInstaller = require('./package_manager_env.js');
 const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
-const { PortChecker } = require('./port_checker.js')
+const { PortChecker } = require('./port_checker.js');
+const { FirefoxLauncher } = require('./firefox_launcher.js');
 
 const APP_VER = require('../../package.json').version;
 
@@ -567,6 +568,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
   }
 
   if(serverJson.build<bundleJson.build){//Upgrade package files
+    console.log(`upgrade server-ver:${serverJson.build}, bundle-ver:${bundleJson.build}`)
     //Backup agents:
     // this.setStartupState("Backup your agents...");
     if(existsSync(path.join(srcDir,"agents"))) {
@@ -610,7 +612,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
 
     // const bundleBuffer = getAsset('bundle/bundle.zip')
     // await unzip(Buffer.from(bundleBuffer),srcDir)
-    extractBundle(targetDir, srcDir);
+    await extractBundle(targetDir, srcDir);
     
     //Copy agents folder:
     // this.setStartupState("Restore your agents...");
@@ -718,41 +720,58 @@ async function launchFirefox(url, targetDir, srcDir) {
 
     args = args.concat(['-no-remote', `--remote-debugging-port=${FIREFOX_DEBUG_PORT}`])
     // 使用 spawn 而不是 execFile，更好地处理进程
-    const firefoxProcess = spawn(firefoxExe, args, {
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+    // const firefoxProcess = spawn(firefoxExe, args, {
+    //   detached: false,
+    //   stdio: ['ignore', 'pipe', 'pipe']
+    // });
 
     const newEnvs = {
       WEBDRIVE_APP: webDriveApp
     }
     updateEnvFile(path.join(srcDir,'.env'), newEnvs)
 
-    let buffer = '';
+    // let buffer = '';
 
-    firefoxProcess.stderr.on('data', data => {
-      console.error('[firefoxProcess:stderr]', data.toString());
+    // firefoxProcess.stderr.on('data', data => {
+    //   console.error('[firefoxProcess:stderr]', data.toString());
 
-      buffer += data.toString();
-      // 检测启动成功标志
-      if (buffer.includes('WebDriver BiDi listening on')) {
-        // let callback;
-        console.log('✅ Firefox WebDriver BiDi 已启动');
-        // waitApp=false;
-        // this.connect().then(()=>{
-        //   waitApp = false;
-        //   callback = this.startCallback;
-        //   if (callback) {
-        //     this.startCallback = null;
-        //     this.startCallerror = null;
-        //   }
-        //   callback(this.port);
-        // });
-      }
-    });
+    //   buffer += data.toString();
+    //   // 检测启动成功标志
+    //   if (buffer.includes('WebDriver BiDi listening on')) {
+    //     // let callback;
+    //     console.log('✅ Firefox WebDriver BiDi 已启动');
+    //     // waitApp=false;
+    //     // this.connect().then(()=>{
+    //     //   waitApp = false;
+    //     //   callback = this.startCallback;
+    //     //   if (callback) {
+    //     //     this.startCallback = null;
+    //     //     this.startCallerror = null;
+    //     //   }
+    //     //   callback(this.port);
+    //     // });
+    //   }
+    // });
 
-    // firefoxProcess.unref();
-    firefoxProcess.on('exit', (code) => {
+    // firefoxProcess.on('close', (code) => {
+    //   console.log(`firefox process close all stdio with code ${code}`);
+    // });
+
+    // // firefoxProcess.unref();
+    // firefoxProcess.on('exit', (code) => {
+    //   console.log('Server exited with code', code);
+
+    //   if(isWin()) {
+    //     return;
+    //   }
+      
+    //   if(aaProcess) {
+    //     aaProcess.kill();
+    //   }
+    //   process.exit(code)
+    // });
+
+    const onFirefoxExit = (code) => {
       console.log('Server exited with code', code);
 
       if(isWin()) {
@@ -763,7 +782,12 @@ async function launchFirefox(url, targetDir, srcDir) {
         aaProcess.kill();
       }
       process.exit(code)
-    });
+    }
+    const firefoxInstance = new FirefoxLauncher(firefoxExe, url);
+    const firefoxProcess = await firefoxInstance.launch({
+      debugPort: FIREFOX_DEBUG_PORT,
+      onExit: onFirefoxExit
+    })
 
     // 可选：等待一段时间检查进程是否正常运行
     setTimeout(() => {
@@ -839,6 +863,7 @@ async function ai2appsStart(cb, res) {
 
     sendSSEProgress(res, '启动AA服务...')
     process.env.BROWSER_DEBUG_PORT = FIREFOX_DEBUG_PORT;
+    process.env.BROWSER_HEADLESS = 0;
 
     if(await PortChecker.isPortInUse(AA_SERVICE_PORT)) {
       AA_SERVICE_PORT = await PortChecker.findAvailablePort(AA_SERVICE_PORT+1,AA_SERVICE_PORT+100)

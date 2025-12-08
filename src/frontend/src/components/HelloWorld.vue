@@ -6,7 +6,7 @@ defineProps({
   msg: String,
 })
 
-const comLogo = ref('../assets/comlogo.png')
+const comLogo = ref('')
 
 const count = ref(0)
 const dots = ref('')
@@ -114,6 +114,8 @@ const animate = () => {
 onMounted(() => {
   if (typeof __COM_LOGO_DATA__ !== 'undefined') {
     comLogo.value = `data:image/png;base64,${__COM_LOGO_DATA__}`
+  } else {
+    comLogo.value = '../assets/comlogo.png'
   }
 
   // 加载点动画

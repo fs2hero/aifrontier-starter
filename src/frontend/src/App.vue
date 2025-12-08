@@ -74,7 +74,7 @@ onMounted(async () => {
 <template>
   <div class="app-container">
     <header class="app-header">
-      <a href="https://www.ai2apps.com/" target="_blank">
+      <a href="https://github.com/Avdpro/ai2apps" target="_blank">
         <img src="./assets/aalogo.svg" class="logo aa" alt="aa logo" />
       </a>
     </header>
