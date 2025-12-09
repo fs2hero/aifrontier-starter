@@ -1,13 +1,16 @@
-const { spawn, execSync } = require('child_process');
+const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+var SingleInstance = require('single-instance');
 
 class FirefoxLauncher {
   constructor(firefoxPath, defaultUrl) {
     this.defaultUrl = defaultUrl;
     this.firefoxPath = firefoxPath;
+
+    this.appName = this.extractAppName(firefoxPath);
     
     // 根据URL生成唯一的profileId
     const urlHash = crypto.createHash('md5').update(defaultUrl).digest('hex').substring(0, 12);
@@ -20,7 +23,77 @@ class FirefoxLauncher {
     
     this.process = null;
     this.sessionManager = new SessionManager(this.profileBaseDir);
+
+    this.appLocker = new SingleInstance('my-aifrontier-app');
   }
+
+  extractAppName(exePath) {
+    // 从路径提取应用名称
+    const appMatch = exePath.match(/\/([^\/]+)\.app\//);
+
+    console.log(`extractAppName ${exePath} ====> ${appMatch}`)
+    return appMatch ? appMatch[1] : 'Acefox';
+  }
+
+  async getRunningProcesses() {
+    return new Promise((resolve) => {
+      const cmd = `ps aux | grep "${this.appName}" | grep -v grep`;
+      exec(cmd, (error, stdout) => {
+        if (error || !stdout) {
+          resolve([]);
+          return;
+        }
+        
+        const processes = [];
+        const lines = stdout.trim().split('\n');
+        
+        lines.forEach(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 11) {
+            processes.push({
+              pid: parseInt(parts[1]),
+              user: parts[0],
+              cpu: parts[2],
+              mem: parts[3],
+              command: parts.slice(10).join(' '),
+            });
+          }
+        });
+        
+        resolve(processes);
+      });
+    });
+  }
+  
+  // async isAcefoxExist() {
+  //   try {
+  //     const processes = await this.getRunningProcesses();
+
+  //     return processes.length > 0 ? true : false;
+  //   } catch(err) {
+  //     console.log(`firefox.isExist ${err.message}`)
+  //     return false;
+  //   }
+    
+  // }
+  async isAcefoxExist() {
+    return new Promise(resolve => {
+      this.appLocker.lock()
+      .then(function() {
+        // We just locked our application,
+        // now we can do what we want !
+        console.log(`app locker success`)
+        resolve(false)
+      })
+      .catch(function(err) {
+        console.log(err);
+        // Quit the application
+        console.log(`app locker fail ${err}`)
+        resolve(true)
+      })
+    })
+  }
+
 
   // 获取或创建配置文件
   async getOrCreateProfile() {

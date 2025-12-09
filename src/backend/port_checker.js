@@ -7,12 +7,13 @@ class PortChecker {
    * @param {string} host 主机地址
    * @returns {Promise<boolean>} true表示被占用
    */
-  static async isPortInUse(port, host = '127.0.0.1') {
+  static async isPortInUse(port, host = '0.0.0.0') {
     return new Promise((resolve) => {
       const server = net.createServer();
       
       server.once('error', (err) => {
         server.close();
+        console.log(`checker isPortInUse error: ${err.message}`)
         if (err.code === 'EADDRINUSE') {
           resolve(true);
         } else {
@@ -21,6 +22,7 @@ class PortChecker {
       });
       
       server.once('listening', () => {
+        console.log(`checker isPortInUse listening port:${port},host:${host}`)
         server.close();
         resolve(false);
       });
@@ -37,7 +39,7 @@ class PortChecker {
    * @param {string} host 主机地址
    * @returns {Promise<number|null>} 返回可用端口或null
    */
-  static async findAvailablePort(startPort = 3000, endPort = 4000, host = '127.0.0.1') {
+  static async findAvailablePort(startPort = 3000, endPort = 4000, host = '0.0.0.0') {
     for (let port = startPort; port <= endPort; port++) {
       const inUse = await this.isPortInUse(port, host);
       if (!inUse) {

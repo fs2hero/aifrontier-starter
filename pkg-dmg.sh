@@ -33,6 +33,10 @@ cat > "dist/out/AIFrontier.app/Contents/Info.plist" << EOF
     <string>icon.icns</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
+    <key>LSMultipleInstancesProhibited</key>
+    <true/>
+    <key>LSActivationPolicy</key>
+    <string>Regular</string>
 </dict>
 </plist>
 EOF

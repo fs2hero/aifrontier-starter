@@ -1,6 +1,6 @@
 {
   "name": "aifrontier",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "index.js",
   "scripts": {
     "dev": "vite dev src/frontend",
@@ -36,6 +36,7 @@
     "archiver": "^7.0.1",
     "auto-updater": "^1.0.2",
     "express": "^5.1.0",
+    "single-instance": "^0.0.1",
     "yauzl": "^3.2.0"
   }
 }

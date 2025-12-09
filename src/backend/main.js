@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 const { existsSync, chmodSync, writeFileSync, readFileSync, rename, promises:fsp } = require('fs');
 const { getAsset, isSea } = require('node:sea');
 const { unzip } = require('./zip.js');
-const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile } = require('./sys_utils.js');
+const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile, writeLogFile } = require('./sys_utils.js');
 const NodeInstaller = require('./node_env.js');
 const MinicondaInstaller = require('./miniconda_env.js');
 const PackageManagerInstaller = require('./package_manager_env.js');
@@ -13,6 +13,7 @@ const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
 const { PortChecker } = require('./port_checker.js');
 const { FirefoxLauncher } = require('./firefox_launcher.js');
+// const notifier = require('node-notifier');
 
 const APP_VER = require('../../package.json').version;
 
@@ -23,7 +24,29 @@ let FIREFOX_DEBUG_PORT = 9222
 let STARTER_SERVICE_PORT = 4000
 let AA_SERVICE_PORT = 3015
 
- const nodeInstaller = new NodeInstaller();
+const nodeInstaller = new NodeInstaller();
+let firefoxInstance = null;
+
+// async function sendNotification(title, message) {
+//   return new Promise((resolve, reject) => {
+//     notifier.notify({
+//       title: title,
+//       message: message,
+//       sound: true,
+//       wait: false
+//     }, (err, response) => {
+//       if (err) {
+//         reject(err);
+//       } else {
+//         resolve(response);
+//       }
+//     });
+    
+//     // 防止回调不触发的问题
+//     notifier.on('click', () => resolve('clicked'));
+//     notifier.on('timeout', () => resolve('timeout'));
+//   });
+// }
 
 function runBashScript(script,cwd) {
 	return new Promise((resolve, reject) => {
@@ -783,7 +806,22 @@ async function launchFirefox(url, targetDir, srcDir) {
       }
       process.exit(code)
     }
-    const firefoxInstance = new FirefoxLauncher(firefoxExe, url);
+    firefoxInstance = new FirefoxLauncher(firefoxExe, url);
+
+    const isExist = await firefoxInstance.isAcefoxExist();
+    writeLogFile(`acefox is exist ${isExist}`);
+    if(isExist) {
+      // Close AIFrontier
+      //A copy of AIFrontier is already open. Only one copy of AIFrontier can be open at a time.
+      console.log(`AIFrontier is exist`)
+      
+      const title = 'Close AIFrontier'
+      const content = 'A copy of AIFrontier is already open. Only one copy of AIFrontier can be open at a time.'
+      // await sendNotification(title, content)
+      process.exit(0)
+      return
+    }
+
     const firefoxProcess = await firefoxInstance.launch({
       debugPort: FIREFOX_DEBUG_PORT,
       onExit: onFirefoxExit
@@ -1063,7 +1101,9 @@ app.get('/api/bootstrap', async (req, res) => {
 
 async function startServer() {
   // Start the server
-  if(await PortChecker.isPortInUse(STARTER_SERVICE_PORT)) {
+  const isInUse = await PortChecker.isPortInUse(STARTER_SERVICE_PORT)
+  writeLogFile(`startServer is inuse ${isInUse}, port:${STARTER_SERVICE_PORT}`)
+  if(isInUse) {
     STARTER_SERVICE_PORT = await PortChecker.findAvailablePort(STARTER_SERVICE_PORT+1,STARTER_SERVICE_PORT+100)
 
     if(!STARTER_SERVICE_PORT) {
@@ -1071,6 +1111,7 @@ async function startServer() {
       throw new Error('启动页无可用端口')
     }
   }
+  writeLogFile(`startServer ${isInUse}, port:${STARTER_SERVICE_PORT}`)
   app.listen(STARTER_SERVICE_PORT, async () => {
     console.log(`Server running on http://localhost:${STARTER_SERVICE_PORT}`)
 
@@ -1090,4 +1131,5 @@ async function startServer() {
   })
 }
 
+writeLogFile(`run start server`)
 startServer()

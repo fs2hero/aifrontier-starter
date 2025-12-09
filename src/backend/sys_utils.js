@@ -230,6 +230,38 @@ function getUserDir() {
   };
 }
 
+async function writeLogFile(message, logFileName = 'aifrontier.log', logDir = null) {
+  try {
+    // 确定日志目录
+    const logDirectory = logDir || path.join(os.tmpdir(), 'logs');
+    
+    // 确保日志目录存在
+    await fs.mkdir(logDirectory, { recursive: true },(err) => {
+      if (err) throw err;
+      console.log(`mkdir logDir ${logDir}`);
+    });
+    
+    // 完整的日志文件路径
+    const logFilePath = path.join(logDirectory, logFileName);
+    
+    // 格式化日志内容
+    const timestamp = new Date().toISOString();
+    const logMessage = `{${process.pid}}[${timestamp}] ${message}\n`;
+    
+    // 异步写入日志（追加模式）
+    await fs.appendFile(logFilePath, logMessage, 'utf8',(err) => {
+      if (err) throw err;
+      console.log('The "data to append" was appended to file!');
+    });
+    
+    console.log(`日志已写入: ${logFilePath}`);
+    return logFilePath;
+  } catch (error) {
+    console.error('写入日志文件失败:', error);
+    throw error;
+  }
+}
+
 module.exports = {
     ensureDirSync,
     copyFileToDir,
@@ -244,5 +276,6 @@ module.exports = {
     copyDirWithReplace,
     linkDir,
     removeDirOrFile,
-    execSyncAsync
+    execSyncAsync,
+    writeLogFile
 };
