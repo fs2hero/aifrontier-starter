@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const https = require('https');
 const http = require('http');
-const { execSyncAsync } = require('./sys_utils')
+const { execSyncAsync, shWithAdmin } = require('./sys_utils')
 
 class CurlInstaller {
   constructor(options = {}) {
@@ -43,7 +43,21 @@ class CurlInstaller {
 
       } else {
         // Unix-like 系统
-        await execSyncAsync('which curl', { stdio: 'ignore' });
+        if(this.platform === 'darwin') {
+          await execSyncAsync('which curl', { stdio: 'ignore' });
+        } else {
+          // Linux 特殊处理
+          await execSyncAsync('which curl', { stdio: 'ignore', env: {
+            ...process.env,
+            // 手动添加系统路径到 PATH
+            PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+            // 确保重要变量存在
+            HOME: process.env.HOME || require('os').homedir(),
+            USER: process.env.USER || require('os').userInfo().username,
+            LOGNAME: process.env.USER || require('os').userInfo().username,
+          } });
+        }
+        
         return true;
       }
     } catch {
@@ -54,8 +68,22 @@ class CurlInstaller {
   // 获取 curl 版本
   async getCurlVersionAsync() {
     try {
-      const version = await execSyncAsync('curl --version', { encoding: 'utf8' });
-      return version.split('\n')[0];
+      if(this.platform === 'linux') {
+        const version = await execSyncAsync('curl --version', { encoding: 'utf8', env: {
+          ...process.env,
+          // 手动添加系统路径到 PATH
+          PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+          // 确保重要变量存在
+          HOME: process.env.HOME || require('os').homedir(),
+          USER: process.env.USER || require('os').userInfo().username,
+          LOGNAME: process.env.USER || require('os').userInfo().username,
+        }});
+        return version.split('\n')[0];
+      } else {
+        const version = await execSyncAsync('curl --version', { encoding: 'utf8' });
+        return version.split('\n')[0];
+      }
+      
     } catch {
       return null;
     }
@@ -72,21 +100,24 @@ class CurlInstaller {
           if (fs.existsSync('/etc/debian_version')) {
             // Debian/Ubuntu
             this.logger('🐧 Debian/Ubuntu detected, using apt...');
-            await execSyncAsync('sudo apt update && sudo apt install -y curl', { 
-              stdio: this.silent ? 'ignore' : 'inherit' 
-            });
+            await shWithAdmin('apt update && apt install -y curl');
+            // await execSyncAsync('sudo apt update && sudo apt install -y curl', { 
+            //   stdio: this.silent ? 'ignore' : 'inherit' 
+            // });
           } else if (fs.existsSync('/etc/redhat-release') || fs.existsSync('/etc/centos-release')) {
             // RedHat/CentOS
             this.logger('🎩 RedHat/CentOS detected, using yum...');
-            await execSyncAsync('sudo yum install -y curl', { 
-              stdio: this.silent ? 'ignore' : 'inherit' 
-            });
+            await shWithAdmin('yum install -y curl');
+            // await execSyncAsync('sudo yum install -y curl', { 
+            //   stdio: this.silent ? 'ignore' : 'inherit' 
+            // });
           } else if (fs.existsSync('/etc/alpine-release')) {
             // Alpine Linux
             this.logger('🏔️ Alpine Linux detected, using apk...');
-            await execSyncAsync('sudo apk add curl', { 
-              stdio: this.silent ? 'ignore' : 'inherit' 
-            });
+            await shWithAdmin('apk add curl');
+            // await execSyncAsync('sudo apk add curl', { 
+            //   stdio: this.silent ? 'ignore' : 'inherit' 
+            // });
           } else {
             throw new Error('Unsupported Linux distribution');
           }

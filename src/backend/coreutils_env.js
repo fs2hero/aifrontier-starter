@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 const os = require('os');
 const https = require('https');
 const http = require('http');
-const { execSyncAsync } = require('./sys_utils')
+const { execSyncAsync, shWithAdmin } = require('./sys_utils')
 
 class CoreutilsInstaller {
   constructor(options = {}) {
@@ -43,8 +43,22 @@ class CoreutilsInstaller {
         return bRet;
       } else {
         // Unix-like 系统通常已安装
-        const cmd = this.platform === 'darwin' ? 'command -v greadlink && greadlink --version' : 'command -v readlink && readlink --version';
-        await execSyncAsync(cmd, { stdio: 'ignore' });
+        if (this.platform === 'darwin') {
+          const cmd = 'command -v greadlink && greadlink --version';
+          await execSyncAsync(cmd, { stdio: 'ignore' });
+        } else {
+          const cmd = 'command -v readlink && readlink --version';
+          await execSyncAsync(cmd, { stdio: 'ignore', env: {
+            ...process.env,
+            // 手动添加系统路径到 PATH
+            PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+            // 确保重要变量存在
+            HOME: process.env.HOME || require('os').homedir(),
+            USER: process.env.USER || require('os').userInfo().username,
+            LOGNAME: process.env.USER || require('os').userInfo().username,
+          }});
+        }
+        
         return true;
       }
     } catch {
@@ -256,19 +270,13 @@ class CoreutilsInstaller {
         // Linux: 使用包管理器
         if (fs.existsSync('/etc/debian_version')) {
           // Debian/Ubuntu
-          await execSyncAsync('sudo apt update && sudo apt install -y coreutils', {
-            stdio: this.silent ? 'ignore' : 'inherit'
-          });
+          await shWithAdmin('apt update && apt install -y coreutils');
         } else if (fs.existsSync('/etc/redhat-release')) {
           // RedHat/CentOS
-          await execSyncAsync('sudo yum install -y coreutils', {
-            stdio: this.silent ? 'ignore' : 'inherit'
-          });
+          await shWithAdmin('yum install -y coreutils');
         } else if (fs.existsSync('/etc/alpine-release')) {
           // Alpine
-          await execSyncAsync('sudo apk add coreutils', {
-            stdio: this.silent ? 'ignore' : 'inherit'
-          });
+          await shWithAdmin('apk add coreutils');
         }
       }
 
@@ -358,7 +366,20 @@ class CoreutilsInstaller {
       
       for (const test of testCommands) {
         try {
-          await execSyncAsync(test.cmd, { stdio: 'ignore' });
+          if(this.platform === 'linux') {
+            await execSyncAsync(test.cmd, { stdio: 'ignore', env: {
+              ...process.env,
+              // 手动添加系统路径到 PATH
+              PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+              // 确保重要变量存在
+              HOME: process.env.HOME || require('os').homedir(),
+              USER: process.env.USER || require('os').userInfo().username,
+              LOGNAME: process.env.USER || require('os').userInfo().username,
+            }});
+          } else {
+            await execSyncAsync(test.cmd, { stdio: 'ignore' });
+          }
+          
           availableTools.push(test.name);
         } catch {
           // 工具不可用

@@ -148,6 +148,7 @@ function runBashScript(script,cwd) {
 // }
 function runShell(script, cwd, logger) {
   const isWin = process.platform === "win32";
+  const isMac = process.platform === 'darwin';
 
   return new Promise((resolve, reject) => {
     let child;
@@ -160,10 +161,24 @@ function runShell(script, cwd, logger) {
         cwd: cwd || undefined,
         env: process.env,
       });
-    } else {
+    } else if(isMac) {
       child = spawn("bash", ["-i", "-c", script], {
         cwd: cwd || undefined,
         env: process.env,
+      });
+    } else {
+      child = spawn("/usr/bin/bash", ["-i", "-c", script], {
+        cwd: cwd || undefined,
+        env: {
+          ...process.env,
+          // 手动添加系统路径到 PATH
+          PATH: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${process.env.PATH || ''}`,
+          // 确保重要变量存在
+          HOME: process.env.HOME || require('os').homedir(),
+          USER: process.env.USER || require('os').userInfo().username,
+          LOGNAME: process.env.USER || require('os').userInfo().username,
+        },
+        // stdio: ['pipe', 'pipe', 'pipe']
       });
     }
 
@@ -727,7 +742,7 @@ async function launchFirefox(url, targetDir, srcDir) {
   if(existsSync(firefoxExe)) {
 
     try {
-      // chmodSync(firefoxExe, '755');
+      chmodSync(firefoxExe, '755');
     } catch (error) {
       console.log('权限设置失败:', error.message);
     }

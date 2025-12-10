@@ -12,3 +12,4 @@ sign-and-notarize.sh
 install-local
 *.bak
 notarization.sh
+appimagetool-aarch64.AppImage
