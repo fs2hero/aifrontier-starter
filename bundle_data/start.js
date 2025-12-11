@@ -14,6 +14,8 @@ var port = normalizePort(process.env.PORT || '3105');
 app.set("env","dev");
 app.set('port', port);
 
+console.log(`env.path:${process.env.PATH}`)
+
 //---------------------------------------------------------------------------
 //初始化服务器系统
 app.initCokeCodesApp().then(()=>{

@@ -821,7 +821,7 @@ async function launchFirefox(url, targetDir, srcDir) {
       }
       process.exit(code)
     }
-    firefoxInstance = new FirefoxLauncher(firefoxExe, url);
+    firefoxInstance = new FirefoxLauncher(firefoxExe, url, srcDir);
 
     const isExist = await firefoxInstance.isAcefoxExist();
     writeLogFile(`acefox is exist ${isExist}`);
@@ -1141,7 +1141,7 @@ async function startServer() {
     }
     
     
-    const url = `http://localhost:${STARTER_SERVICE_PORT}`;
+    const url = `http://localhost:${STARTER_SERVICE_PORT}?pin=1`;
     await launchFirefox(url, targetDir, srcDir);
   })
 }

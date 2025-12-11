@@ -3,10 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const fsExtra = require('fs-extra');
 var SingleInstance = require('single-instance');
+const { ExtensionInstaller } = require('./extension_installer');
 
 class FirefoxLauncher {
-  constructor(firefoxPath, defaultUrl) {
+  constructor(firefoxPath, defaultUrl, projectDir) {
     this.defaultUrl = defaultUrl;
     this.firefoxPath = firefoxPath;
 
@@ -19,12 +21,18 @@ class FirefoxLauncher {
     // 使用持久化目录
     const homeDir = os.homedir();
     this.profileBaseDir = path.join(homeDir, '.firefox-launcher-profiles');
-    this.profileDir = path.join(this.profileBaseDir, this.profileId);
+    this.profileDir = this.profileBaseDir; //path.join(this.profileBaseDir, this.profileId);
+    this.projectDir = projectDir;
     
     this.process = null;
     this.sessionManager = new SessionManager(this.profileBaseDir);
 
     this.appLocker = new SingleInstance('my-aifrontier-app');
+
+    this.extInstaller = new ExtensionInstaller({
+      profilePath: path.join(this.profileDir, this.profileId),
+      xpiPath: path.join(this.projectDir,'acefox_extensions','auto-pin@ai2apps.cn.xpi')
+    })
   }
 
   extractAppName(exePath) {
@@ -187,6 +195,8 @@ user_pref("browser.sessionstore.enabled", false);
 user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("browser.sessionstore.restore_on_demand", false);
 user_pref("browser.sessionstore.resume_session_once", false);
+user_pref("browser.sessionstore.max_tabs_undo", 0);
+user_pref("browser.sessionstore.max_windows_undo", 0);
 user_pref("extensions.autoDisableScopes", 0);
 user_pref("extensions.enabledScopes", 15);
 user_pref("xpinstall.signatures.required", false);
@@ -280,9 +290,48 @@ user_pref("browser.shell.checkDefaultBrowser", false);
     return process;
   }
 
+  async cleanSessionFiles() {
+    const sessionFiles = [
+      'sessionstore.jsonlz4',
+      'sessionstore-backups/*',
+      'recovery.jsonlz4',
+      'recovery.baklz4',
+      'sessionCheckpoints.json',
+      'previous.jsonlz4'
+    ];
+    const profilePath = path.join(this.profileDir, this.profileId);
+
+    for (const filePattern of sessionFiles) {
+      try {
+        const files = await fsExtra.glob(path.join(profilePath, filePattern));
+        for (const file of files) {
+          await fsExtra.remove(file);
+          console.log('已删除会话文件:', path.basename(file));
+        }
+      } catch (error) {
+        // 文件不存在或其他错误，忽略
+      }
+    }
+
+    // 创建空的 sessionstore.js 防止恢复
+    const sessionstorePath = path.join(profilePath, 'sessionstore.js');
+    const emptySession = {
+      windows: [],
+      selectedWindow: 0,
+      _version: 1
+    };
+
+    fs.writeFileSync(sessionstorePath, JSON.stringify(emptySession, null, 2));
+    console.log('已创建空的会话文件');
+  }
+
   // 直接启动方法
   async launchDirect(options) {
     const profileDir = await this.getOrCreateProfile();
+    await this.extInstaller.installExtension();
+
+    // 3. 清理可能存在的会话文件
+    await this.cleanSessionFiles();
     
     const args = this.buildLaunchArgs(profileDir, options);
     console.log(`启动命令: ${this.firefoxPath} ${args.join(' ')}`);

@@ -36,6 +36,7 @@
     "archiver": "^7.0.1",
     "auto-updater": "^1.0.2",
     "express": "^5.1.0",
+    "fs-extra": "^11.3.2",
     "single-instance": "^0.0.1",
     "yauzl": "^3.2.0"
   }

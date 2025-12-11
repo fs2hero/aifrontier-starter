@@ -77,6 +77,7 @@ onMounted(async () => {
       <a href="https://github.com/Avdpro/ai2apps" target="_blank">
         <img src="./assets/aalogo.svg" class="logo aa" alt="aa logo" />
       </a>
+      <div class="app-name">AIFrontier</div>
     </header>
     <div class="version">{{ `v${appVer}` }}</div>
     <main class="app-main">
@@ -126,10 +127,10 @@ onMounted(async () => {
 
 .app-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  justify-content: flex-start;
+  gap:1rem;
+  align-items: end;
   margin-bottom: 20px;
-  padding-bottom: 15px;
   border-bottom: 1px solid #e0e0e0;
 }
 
@@ -241,13 +242,18 @@ onMounted(async () => {
 }
 
 .logo {
-  height: 6em;
-  padding: 1.5em;
+  height: 5em;
   will-change: filter;
   transition: filter 300ms;
 }
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.app-name {
+  color: black;
+  font-size: 1.1rem;
+  font-weight: bold;
 }
 
 .version {
