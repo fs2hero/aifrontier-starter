@@ -453,11 +453,18 @@ function serveFromSeaAssets(req, res, next) {
     // 设置正确的 Content-Type
     const ext = path.extname(requestPath);
     const contentType = getContentType(ext);
-    if(['text/html','text/css','application/javascript','application/json','text/plain'].includes(contentType)) {
+    console.log(`contentType ${requestPath} ==> ${contentType}`)
+    if(['text/html','text/css','application/javascript','application/json','text/plain','image/svg+xml'].includes(contentType)) {
       assetStr = convertArrayBufferToString(assetData);
     }
     // console.log('asset data:',assetStr)
     res.setHeader('Content-Type', contentType);
+
+    // 特别处理 SVG
+    if (contentType === 'image/svg+xml') {
+      // res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      // console.log(`svg data: ${assetStr}`)
+    }
     res.send(assetStr);
   } else {
     // 尝试找 index.html（用于 SPA 路由）
