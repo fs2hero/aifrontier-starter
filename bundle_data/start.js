@@ -5,6 +5,7 @@
 var app = require('./app.js');
 var debug = require('debug')('home:server');
 var http = require('http');
+var { writeLogFile } = require('./util/logger.js')
 
 /**
  * Get port from environment and store in Express.
@@ -18,7 +19,9 @@ console.log(`env.path:${process.env.PATH}`)
 
 //---------------------------------------------------------------------------
 //初始化服务器系统
-app.initCokeCodesApp().then(()=>{
+app.initCokeCodesApp().then(async ()=>{
+	await writeLogFile(`main::start env.path => ${process.env.PATH}`)
+
 	server = http.createServer(app);
 	
 	server.listen(port);

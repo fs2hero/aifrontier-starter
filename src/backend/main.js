@@ -13,8 +13,8 @@ const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
 const { PortChecker } = require('./port_checker.js');
 const { FirefoxLauncher } = require('./firefox_launcher.js');
-const { writeLogFile, flushLogs } = require('./logger.js')
-// const notifier = require('node-notifier');
+const { writeLogFile, flushLogs } = require('./logger.js');
+const { setupEnvironment } = require('./env_helper.js');
 
 const APP_VER = require('../../package.json').version;
 
@@ -1125,7 +1125,10 @@ app.get('/api/bootstrap', async (req, res) => {
 
 async function startServer() {
   await writeLogFile(`run start server`);
-  
+
+  await setupEnvironment();
+  await writeLogFile(`setupEnvironment path: ${process.env.PATH}`)
+
   // Start the server
   const isInUse = await PortChecker.isPortInUse(STARTER_SERVICE_PORT)
   await writeLogFile(`startServer is inuse ${isInUse}, port:${STARTER_SERVICE_PORT}`)

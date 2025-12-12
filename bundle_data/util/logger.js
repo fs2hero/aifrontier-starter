@@ -66,10 +66,8 @@ async function main() {
 // main().catch(console.error);
 let logger = null;
 
-async function writeLogFile(message, logFileName = 'aifrontier.log', logDir = null) {
+async function writeLogFile(message, logFileName = 'ai2apps.log', logDir = null) {
   try {
-    console.log(message);
-    
     if(!logger) {
         // 确定日志目录
         const logDirectory = logDir || path.join(os.tmpdir(), 'logs');

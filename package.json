@@ -1,6 +1,6 @@
 {
   "name": "aifrontier",
-  "version": "1.0.4",
+  "version": "1.0.5-alpha",
   "main": "index.js",
   "scripts": {
     "dev": "vite dev src/frontend",
