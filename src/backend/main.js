@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 const { existsSync, chmodSync, writeFileSync, readFileSync, rename, promises:fsp } = require('fs');
 const { getAsset, isSea } = require('node:sea');
 const { unzip } = require('./zip.js');
-const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile, writeLogFile } = require('./sys_utils.js');
+const { getUserDir, ensureDirSync, isWin, copyDirWithReplace, copyFileToDir, removeDirOrFile } = require('./sys_utils.js');
 const NodeInstaller = require('./node_env.js');
 const MinicondaInstaller = require('./miniconda_env.js');
 const PackageManagerInstaller = require('./package_manager_env.js');
@@ -13,6 +13,7 @@ const CurlInstaller = require('./curl_env.js');
 const CoreutilsInstaller = require('./coreutils_env.js');
 const { PortChecker } = require('./port_checker.js');
 const { FirefoxLauncher } = require('./firefox_launcher.js');
+const { writeLogFile, flushLogs } = require('./logger.js')
 // const notifier = require('node-notifier');
 
 const APP_VER = require('../../package.json').version;
@@ -831,7 +832,7 @@ async function launchFirefox(url, targetDir, srcDir) {
     firefoxInstance = new FirefoxLauncher(firefoxExe, url, srcDir);
 
     const isExist = await firefoxInstance.isAcefoxExist();
-    writeLogFile(`acefox is exist ${isExist}`);
+    await writeLogFile(`acefox is exist ${isExist}`);
     if(isExist) {
       // Close AIFrontier
       //A copy of AIFrontier is already open. Only one copy of AIFrontier can be open at a time.
@@ -840,6 +841,7 @@ async function launchFirefox(url, targetDir, srcDir) {
       const title = 'Close AIFrontier'
       const content = 'A copy of AIFrontier is already open. Only one copy of AIFrontier can be open at a time.'
       // await sendNotification(title, content)
+      await flushLogs()
       process.exit(0)
       return
     }
@@ -1122,9 +1124,11 @@ app.get('/api/bootstrap', async (req, res) => {
 
 
 async function startServer() {
+  await writeLogFile(`run start server`);
+  
   // Start the server
   const isInUse = await PortChecker.isPortInUse(STARTER_SERVICE_PORT)
-  writeLogFile(`startServer is inuse ${isInUse}, port:${STARTER_SERVICE_PORT}`)
+  await writeLogFile(`startServer is inuse ${isInUse}, port:${STARTER_SERVICE_PORT}`)
   if(isInUse) {
     STARTER_SERVICE_PORT = await PortChecker.findAvailablePort(STARTER_SERVICE_PORT+1,STARTER_SERVICE_PORT+100)
 
@@ -1133,7 +1137,7 @@ async function startServer() {
       throw new Error('启动页无可用端口')
     }
   }
-  writeLogFile(`startServer ${isInUse}, port:${STARTER_SERVICE_PORT}`)
+  await writeLogFile(`startServer ${isInUse}, port:${STARTER_SERVICE_PORT}`)
   app.listen(STARTER_SERVICE_PORT, async () => {
     console.log(`Server running on http://localhost:${STARTER_SERVICE_PORT}`)
 
@@ -1153,5 +1157,4 @@ async function startServer() {
   })
 }
 
-writeLogFile(`run start server`)
 startServer()
