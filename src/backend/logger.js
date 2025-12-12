@@ -63,7 +63,7 @@ async function main() {
   }, 3000);
 }
 
-main().catch(console.error);
+// main().catch(console.error);
 let logger = null;
 
 async function writeLogFile(message, logFileName = 'aifrontier.log', logDir = null) {
