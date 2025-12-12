@@ -621,7 +621,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
       await removeDirOrFile(path.join(targetDir,"agents"));
       rename(path.join(srcDir,"agents"),path.join(targetDir,"agents"), (err) => {
         if (err) return console.error('Failed to move:', err);
-        console.log('Directory moved successfully');
+        console.log(`Directory moved successfully ${path.join(srcDir,"agents")} => ${path.join(targetDir,"agents")}`);
       });
     }
     
@@ -634,7 +634,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
       await removeDirOrFile(path.join(targetDir,"filehub"));
       rename(path.join(srcDir,"filehub"),path.join(targetDir,"filehub"), (err) => {
         if (err) return console.error('Failed to move:', err);
-        console.log('Directory moved successfully');
+        console.log(`Directory moved successfully ${path.join(srcDir,"filehub")} => ${path.join(targetDir,"filehub")}`);
       });
     }
     
@@ -645,7 +645,7 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
       await removeDirOrFile(path.join(targetDir,"rpa_data_dir"));
       rename(path.join(srcDir,"rpa_data_dir"),path.join(targetDir,"rpa_data_dir"), (err) => {
         if (err) return console.error('Failed to move:', err);
-        console.log('Directory moved successfully');
+        console.log(`Directory moved successfully ${path.join(srcDir,"rpa_data_dir")} => ${path.join(targetDir,"rpa_data_dir")}`);
       });
     }
     
@@ -662,28 +662,37 @@ async function checkAndUpgradeBundle(targetDir, srcDir) {
     
     //Copy agents folder:
     // this.setStartupState("Restore your agents...");
-    await copyDirWithReplace(path.join(srcDir,"agents"),path.join(targetDir,"agents"));
-    await removeDirOrFile(path.join(srcDir,"agents"));
-    rename(path.join(targetDir,"agents"),path.join(srcDir,"agents"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(targetDir,"agents"))) {
+      await copyDirWithReplace(path.join(srcDir,"agents"),path.join(targetDir,"agents"));
+      await removeDirOrFile(path.join(srcDir,"agents"));
+      rename(path.join(targetDir,"agents"),path.join(srcDir,"agents"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log(`Directory moved successfully ${path.join(targetDir,"agents")} => ${path.join(srcDir,"agents")}`);
+      });
+    }
+    
     //await fsp.mkdir(path.join(srcDir,"agents"), { recursive: true });
     //await copyDirWithReplace(path.join(targetDir,"agents"),path.join(srcDir,"agents"));
     
     // this.setStartupState("Restore your files...");
-    await removeDirOrFile(path.join(srcDir,"filehub"));
-    rename(path.join(targetDir,"filehub"), path.join(srcDir,"filehub"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(targetDir,"filehub"))) {
+      await removeDirOrFile(path.join(srcDir,"filehub"));
+      rename(path.join(targetDir,"filehub"), path.join(srcDir,"filehub"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log(`Directory moved successfully ${path.join(targetDir,"filehub")} => ${path.join(srcDir,"filehub")}`);
+      });
+    }
+    
 
     // this.setStartupState("Restore your rpa data files...");
-    await removeDirOrFile(path.join(srcDir,"rpa_data_dir"));
-    rename(path.join(srcDir,"rpa_data_dir"), path.join(targetDir,"rpa_data_dir"), (err) => {
-      if (err) return console.error('Failed to move:', err);
-      console.log('Directory moved successfully');
-    });
+    if(existsSync(path.join(targetDir,"rpa_data_dir"))) {
+      await removeDirOrFile(path.join(srcDir,"rpa_data_dir"));
+      rename(path.join(targetDir,"rpa_data_dir"), path.join(srcDir,"rpa_data_dir"), (err) => {
+        if (err) return console.error('Failed to move:', err);
+        console.log(`Directory moved successfully ${path.join(targetDir,"rpa_data_dir")} => ${path.join(srcDir,"rpa_data_dir")}`);
+      });
+    }
+    
 
     //Ensure user-data dirs:
     ensureDirSync(path.join(srcDir,"filehub"));
@@ -1148,7 +1157,9 @@ async function startServer() {
     const targetDir = path.join(userDir.appData,'aifrontier','server');
     const srcDir = path.join(targetDir, 'src')
 
-    if(existsSync(srcDir)) {
+    const isInstalled = existsSync(srcDir);
+    console.log(`Server installed ${isInstalled}`)
+    if(isInstalled) {
       await checkAndUpgradeBundle(targetDir, srcDir)
     } else {
       await extractBundle(targetDir, srcDir);
