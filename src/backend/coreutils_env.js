@@ -205,7 +205,7 @@ class CoreutilsInstaller {
         throw new Error('Chocolatey is not installed. Please install Chocolatey first.');
       }
 
-      await execSyncAsync('choco install coreutils -y', {
+      await execSyncAsync('choco install gnuwin32-coreutils.install -y', {
         stdio: this.silent ? 'ignore' : 'inherit'
       });
 
@@ -451,11 +451,15 @@ class CoreutilsInstaller {
 
     // Windows 系统安装
     try {
-      const recommendedMethod = this.getRecommendedInstallMethod();
+      const recommendedMethod = await this.getRecommendedInstallMethodAsync();
       this.logger(`💡 Recommended installation method: ${recommendedMethod}`);
 
       let success = false;
       let usedMethod = this.installMethod === 'auto' ? recommendedMethod : this.installMethod;
+
+      if(!success) {
+        return;
+      }
 
       switch (usedMethod) {
         case 'git-bash':

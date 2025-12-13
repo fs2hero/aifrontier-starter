@@ -154,8 +154,9 @@ function runShell(script, cwd, logger) {
   return new Promise((resolve, reject) => {
     let child;
 
+    console.log(`runShell script: ${script}`);
     if (isWin) {
-      child = spawn("cmd.exe", [
+      child = spawn("C:\\Windows\\System32\\cmd.exe", [
         "/c",
         script
       ], {

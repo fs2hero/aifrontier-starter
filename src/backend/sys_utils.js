@@ -151,6 +151,24 @@ const sh = async (cmd, env = {}) => {
   }
 };
 
+function getCleanEnv() {
+    const env = {};
+    // 遍历当前进程的环境变量
+    for (const [key, value] of Object.entries(process.env)) {
+        // 关键：只复制名称“合法”的环境变量
+        // 这里的正则表达式允许字母、数字、下划线，排除了括号等特殊字符
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+            env[key] = value;
+        } else {
+            // 对于包含括号等无效字符的变量名，可以选择：
+            // 1. 直接跳过（如示例）
+            // 2. 将其重命名为合法名称（如有需要）
+            console.warn(`跳过无效的环境变量名: ${key}`);
+        }
+    }
+    return env;
+}
+
 const shWithAdmin = async (cmd, env = {}) => {
   const start = Date.now();
   // Log command (single-line) and a small env summary (don't print secrets)
@@ -160,8 +178,9 @@ const shWithAdmin = async (cmd, env = {}) => {
 
     console.log(`[shWithAdmin] RUN -> ${cmd.replace(/\n/g, ' ')} `);
     console.log(`[shWithAdmin] ENV PATH=${(process.env.PATH || '').slice(0, 200)}${(process.env.PATH || '').length > 200 ? '...' : ''}`);
+    const cleanEnv = isWin() ? getCleanEnv() : process.env;
     const { stdout, stderr } = await new Promise((resolve,reject) => {
-      sudo.exec(`${cmd}`, {...options, env: { ...process.env, ...env } }, function(error, stdout, stderr) {
+      sudo.exec(`${cmd}`, {...options, env: { ...cleanEnv, ...env } }, function(error, stdout, stderr) {
         if (error) {
           reject(error);
         } else {

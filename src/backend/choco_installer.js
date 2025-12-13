@@ -5,13 +5,14 @@ const path = require('path');
 const os = require('os');
 const https = require('https');
 const { URL } = require('url');
-const { execSyncAsync } = require('./sys_utils')
+const { execSyncAsync, shWithAdmin } = require('./sys_utils')
 
 class ChocolateyInstaller {
   constructor(options = {}) {
     // 配置选项
+    const programData = process.env.ProgramData || 'C:\\ProgramData';
     this.options = {
-      installPath: options.installPath || path.join(os.homedir(), '.chocolatey'),
+      installPath: options.installPath || path.join(programData, 'chocolatey'),
       // 是否跳过管理员权限检查（适用于受限环境）
       skipAdminCheck: options.skipAdminCheck || false,
       // PowerShell执行策略
@@ -80,10 +81,10 @@ class ChocolateyInstaller {
     this.logger('🔍 检查PowerShell执行策略...');
     
     try {
-      const result = await execSyncAsync(
+      const result = (await execSyncAsync(
         `"${this.powershellPath}" -Command "Get-ExecutionPolicy"`,
         { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
-      ).trim();
+      )).trim();
       
       this.logger(`  当前执行策略: ${result}`);
       
@@ -96,7 +97,7 @@ class ChocolateyInstaller {
       
       return true;
     } catch (error) {
-      this.logger('⚠️  无法获取执行策略，继续安装...');
+      this.logger(`⚠️  无法获取执行策略，继续安装...${error.message}`);
       return true;
     }
   }
@@ -176,10 +177,10 @@ class ChocolateyInstaller {
     this.logger('🔍 检查.NET Framework...');
     
     try {
-      const result = await execSyncAsync(
+      const result = (await execSyncAsync(
         `"${this.powershellPath}" -Command "[System.Environment]::Version.ToString()"`,
         { encoding: 'utf8', stdio: 'pipe' }
-      ).trim();
+      )).trim();
       
       this.logger(`  .NET CLR版本: ${result}`);
       
@@ -228,22 +229,25 @@ class ChocolateyInstaller {
   async installWithAdminScript() {
     this.logger('🚀 使用官方脚本安装（需要管理员权限）...');
     
-    const installScript = `
-      [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
-      iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-    `;
+    //@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
+    const installScript = `-NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\\chocolatey\\bin"`;
+    // const installScript = `
+    //   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
+    //   iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+    // `;
     
     try {
       this.logger('📥 下载并执行官方安装脚本...');
       
-      await execSyncAsync(
-        `"${this.powershellPath}" -ExecutionPolicy Bypass -Command "${installScript}"`,
-        { 
-          stdio: 'inherit',
-          windowsHide: true,
-          timeout: 300000 // 5分钟超时
-        }
-      );
+      // await execSyncAsync(
+      //   `"${this.powershellPath}" ${installScript}`,
+      //   { 
+      //     stdio: 'inherit',
+      //     windowsHide: true,
+      //     timeout: 300000 // 5分钟超时
+      //   }
+      // );
+      await shWithAdmin(`"${this.powershellPath}" ${installScript}`);
       
       this.logger('✅ 官方脚本执行完成');
       return true;
@@ -393,10 +397,10 @@ class ChocolateyInstaller {
       }
       
       // 尝试运行 choco --version
-      const version = await execSyncAsync(`"${chocoExe}" --version`, { 
+      const version = (await execSyncAsync(`"${chocoExe}" --version`, { 
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'ignore']
-      }).trim();
+      })).trim();
       
       this.logger(`✅ Chocolatey 版本: ${version}`);
       
@@ -546,15 +550,15 @@ async function main() {
     const success = await installer.install();
     
     if (success) {
-      this.logger('\n✅ Chocolatey 安装成功！');
+      console.log('\n✅ Chocolatey 安装成功！');
       
       // 可以在这里继续安装其他软件包
       if (installer.installSuccess) {
-        this.logger('\n🔧 示例：安装常用工具');
-        this.logger('要安装Git，请运行: choco install git -y');
+        console.log('\n🔧 示例：安装常用工具');
+        console.log('要安装Git，请运行: choco install git -y');
       }
     } else {
-      this.logger('\n❌ Chocolatey 安装失败');
+      console.log('\n❌ Chocolatey 安装失败');
       process.exit(1);
     }
   } catch (error) {
