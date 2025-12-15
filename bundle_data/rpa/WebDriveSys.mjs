@@ -232,7 +232,8 @@ function hideAppByPid(pid) {
 				args = [`--remote-debugging-port=${port}`, `about:blank`];
 			}
 
-			if(!process.env.BROWSER_DEBUG_PORT || process.env.BROWSER_HEADLESS) {
+			const spawnNewBrowser = !process.env.BROWSER_DEBUG_PORT || process.env.BROWSER_HEADLESS == 1
+			if(spawnNewBrowser) {
 				firefox = this.firefox = spawn(
 					`${pathToFireFox}/Contents/MacOS/firefox`,
 					args,
