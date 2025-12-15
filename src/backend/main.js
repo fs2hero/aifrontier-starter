@@ -169,7 +169,7 @@ function runShell(script, cwd, logger) {
         env: process.env,
       });
     } else {
-      child = spawn("/usr/bin/bash", ["-l", "-c", script], {
+      child = spawn("/usr/bin/bash", ["-i", "-c", script], {
         cwd: cwd || undefined,
         env: {
           ...process.env,
