@@ -2,7 +2,6 @@ import child_process,{spawn} from 'child_process';
 import { promisify } from 'util';
 import pty from "node-pty";
 import Terminal  from './nodeterm.js';
-import { writeLogFile } from '../util/logger.js';
 
 //----------------------------------------------------------------------------
 async function getCondaPath() {
@@ -60,8 +59,6 @@ let AgentNodeTerminal,agentNodeTerminal;
 			cols: opts.w||800,
 			rows: opts.h||30,
 		});
-
-		await writeLogFile(`agentNodeTerminal::start env.path => ${process.env.PATH}`)
 		shell=this.shell=pty.spawn('bash', [], {
 			name: 'xterm-color',
 			cols: opts.w||800,

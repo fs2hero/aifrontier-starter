@@ -232,11 +232,7 @@ function hideAppByPid(pid) {
 				args = [`--remote-debugging-port=${port}`, `about:blank`];
 			}
 
-			console.log(`BROWSER_DEBUG_PORT:${process.env.BROWSER_DEBUG_PORT}, BROWSER_HEADLESS:${process.env.BROWSER_HEADLESS}`)
-			let spawnNew = !process.env.BROWSER_DEBUG_PORT || process.env.BROWSER_HEADLESS == 1
-			console.log(`spawn new firefox ${spawnNew}`)
-			if(spawnNew) {
-				console.log(`spawn new firefox`)
+			if(!process.env.BROWSER_DEBUG_PORT || process.env.BROWSER_HEADLESS) {
 				firefox = this.firefox = spawn(
 					`${pathToFireFox}/Contents/MacOS/firefox`,
 					args,
@@ -279,7 +275,6 @@ function hideAppByPid(pid) {
 					await this.sendToHooked("WebDriveBrowserClosed", { alias: this.alias });
 				});
 			} else {
-				console.log(`connect to exist firefox`)
 				let callback;
 				this.connect().then(()=>{
 					callback = this.startCallback;
